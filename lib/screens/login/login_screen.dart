@@ -95,7 +95,6 @@ class _LoginScreenState extends State<LoginScreen> {
       clipBehavior: Clip.hardEdge,
       child: Stack(
         children: [
-          // Círculos decorativos
           Positioned(
             top: -30, right: -30,
             child: _circle(120, AppColors.circleDeco1),
@@ -113,9 +112,8 @@ class _LoginScreenState extends State<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
             child: Column(
               children: [
-                // Logo
                 Image.asset(
-                  'assets/images/ic_logo_wideias.png',
+                  '../../assets/ic_logo_wideias.png',
                   height: 80,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(

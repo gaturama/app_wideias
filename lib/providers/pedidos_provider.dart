@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import '../models/order_item_model.dart';
 import '../models/historico_item_model.dart';
+import '../models/cart_item_model.dart';
 
 class PedidosProvider extends ChangeNotifier {
   List<OrderItemModel> _pedidos = [];
@@ -33,13 +34,53 @@ class PedidosProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> salvarPedidos(String userId, List<OrderItemModel> itens) async {
-    _pedidos = itens;
+  Future<void> adicionarPedidos({
+    required String userId,
+    required List<CartItemModel> cart,
+    required String metodo,
+    required String locationId,
+    required String locationName,
+    String? mesa,
+  }) async {
+    final novos = cart
+        .map(
+          (item) => OrderItemModel(
+            id: item.cartEntryId,
+            orderId: 'order-${DateTime.now().millisecondsSinceEpoch}',
+            productId: item.id,
+            quantity: item.qty,
+            price: item.precoUnitario,
+            observations: item.observacao,
+            product: ProductInfo(
+              id: item.id,
+              name: item.name,
+              imageUrl: item.imageUrl,
+            ),
+            order: OrderInfo(
+              id: 'order-${DateTime.now().millisecondsSinceEpoch}',
+              paymentMethod: metodo,
+              mesa: mesa,
+              location: LocationInfo(
+                id: locationId,
+                name: locationName,
+                address: '',
+              ),
+            ),
+          ),
+        )
+        .toList();
+
+    _pedidos.addAll(novos);
+    await _salvarPedidos(userId);
+    notifyListeners();
+  }
+
+  Future<void> _salvarPedidos(String userId) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(
       'pedidos_$userId',
       jsonEncode(
-        itens
+        _pedidos
             .map(
               (e) => {
                 'id': e.id,
@@ -48,12 +89,26 @@ class PedidosProvider extends ChangeNotifier {
                 'quantity': e.quantity,
                 'price': e.price,
                 'observations': e.observations,
+                'products': {
+                  'id': e.product?.id,
+                  'name': e.product?.name,
+                  'image_url': e.product?.imageUrl,
+                },
+                'orders': {
+                  'id': e.order?.id,
+                  'payment_method': e.order?.paymentMethod,
+                  'mesa': e.order?.mesa,
+                  'locations': {
+                    'id': e.order?.location?.id,
+                    'name': e.order?.location?.name,
+                    'address': e.order?.location?.address,
+                  },
+                },
               },
             )
             .toList(),
       ),
     );
-    notifyListeners();
   }
 
   Future<void> concluirItem(String itemId, String userId) async {

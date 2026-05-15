@@ -11,6 +11,15 @@ import 'screens/home/home_screen.dart';
 import 'screens/credito/credito_screen.dart';
 import 'screens/historico/historico_screen.dart';
 import 'screens/perfil/perfil_screen.dart';
+import 'screens/produto/produto_screen.dart';
+import 'screens/carrinho/carrinho_screen.dart';
+import 'screens/descricao_produto/descricao_produto_screen.dart';
+import 'screens/mesa/mesa_screen.dart';
+import 'screens/pagamento/pagamento_screen.dart';
+import 'screens/dividir_conta/dividir_conta_screen.dart';
+import 'screens/pix/pix_screen.dart';
+import 'screens/qr_code/qr_code_screen.dart';
+import 'screens/qr_scanner/qr_scanner_screen.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -40,6 +49,15 @@ class App extends StatelessWidget {
           '/credito': (_) => const CreditoScreen(),
           '/historico': (_) => const HistoricoScreen(),
           '/perfil': (_) => const PerfilScreen(),
+          '/produto': (_) => const ProdutoScreen(),
+          '/carrinho': (_) => const CarrinhoScreen(),
+          '/descricao-produto': (_) => const DescricaoProdutoScreen(),
+          '/mesa': (_) => const MesaScreen(),
+          '/pagamento': (_) => const PagamentoScreen(),
+          '/dividir-conta': (_) => const DividirContaScreen(),
+          '/pix':        (_) => const PixScreen(),
+          '/qr-code':    (_) => const QrCodeScreen(),
+          '/qr-scanner': (_) => const QrScannerScreen(),
         },
       ),
     );

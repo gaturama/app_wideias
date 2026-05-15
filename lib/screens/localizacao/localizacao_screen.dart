@@ -3,7 +3,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:geocoding/geocoding.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/services/evento_service.dart';
+import '../../core/services/evento.service.dart';
 import '../../models/localizacao_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/storage_provider.dart';
