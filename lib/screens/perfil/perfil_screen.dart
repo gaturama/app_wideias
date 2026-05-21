@@ -145,29 +145,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
                       onPressed: () => setState(() => _showSenha = !_showSenha),
                     ),
                   ),
-                  _buildField(
-                    'TELEFONE',
-                    _telefoneCtrl,
-                    icon: Icons.phone_outlined,
-                    keyboard: TextInputType.phone,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  ),
-                  _buildField(
-                    'CPF',
-                    _cpfCtrl,
-                    icon: Icons.credit_card_outlined,
-                    keyboard: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    maxLength: 11,
-                  ),
-                  _buildField(
-                    'DATA DE NASCIMENTO',
-                    _nascimentoCtrl,
-                    icon: Icons.calendar_today_outlined,
-                  ),
-                  const SizedBox(height: 8),
 
-                  // Salvar
                   SizedBox(
                     height: 52,
                     child: ElevatedButton.icon(
@@ -263,16 +241,18 @@ class _PerfilScreenState extends State<PerfilScreen> {
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
-            top: -20,
-            right: -30,
-            child: _circle(140, AppColors.circleDeco1),
+            top: -70,
+            right: -70,
+            child: _circle(160, AppColors.circleDeco1),
           ),
+
           Positioned(
-            bottom: -20,
-            left: -30,
-            child: _circle(100, AppColors.circleDeco2),
+            bottom: -60,
+            left: -60,
+            child: _circle(130, AppColors.circleDeco2),
           ),
           Column(
             children: [

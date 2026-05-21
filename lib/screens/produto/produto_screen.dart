@@ -81,24 +81,15 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
   }
 
   void _adicionarAoCarrinho(ProdutoModel produto) {
-    Navigator.of(context)
-        .pushNamed(
-          '/descricao-produto',
-          arguments: {
-            'produto': produto,
-            'cart': _cart,
-            'tipoLocal': context.read<StorageProvider>().tipoLocal,
-            'locationId': context.read<StorageProvider>().locationId,
-            'editar': false,
-          },
-        )
-        .then((result) {
-          if (result is Map && result['cart'] != null) {
-            setState(() {
-              _cart = List<CartItemModel>.from(result['cart']);
-            });
-          }
-        });
+    final item = CartItemModel(
+      cartEntryId: '${produto.id}-${DateTime.now().millisecondsSinceEpoch}',
+      id: produto.id,
+      name: produto.name,
+      imageUrl: produto.imageUrl,
+      price: produto.price,
+      qty: 1,
+    );
+    setState(() => _cart.add(item));
   }
 
   void _irParaCarrinho() {
@@ -173,15 +164,16 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
             top: -20,
-            right: -30,
+            right: -50,
             child: _circle(150, AppColors.circleDeco1),
           ),
           Positioned(
-            bottom: -20,
-            left: -30,
+            bottom: -5,
+            left: -40,
             child: _circle(110, AppColors.circleDeco2),
           ),
           Row(

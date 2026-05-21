@@ -40,12 +40,27 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
       if (perm == LocationPermission.denied) {
         perm = await Geolocator.requestPermission();
       }
-      if (perm == LocationPermission.deniedForever) {
+      if (perm == LocationPermission.deniedForever ||
+          perm == LocationPermission.denied) {
+        setState(() => _enderecoAtual = 'Localização não disponível');
+        return;
+      }
+      
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+
+      if (pos == null) {
         setState(() => _enderecoAtual = 'Localização não disponível');
         return;
       }
 
-      final pos = await Geolocator.getCurrentPosition();
       final placemarks = await placemarkFromCoordinates(
         pos.latitude,
         pos.longitude,
@@ -58,7 +73,8 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
         );
       }
     } catch (e) {
-      setState(() => _enderecoAtual = 'Erro ao buscar localização');
+      print('Erro localização: $e');
+      setState(() => _enderecoAtual = 'Localização não disponível');
     }
   }
 
@@ -77,10 +93,37 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
         return;
       }
 
-      final pos = await Geolocator.getCurrentPosition();
+      Position? pos;
+      try {
+        pos = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.low,
+          timeLimit: const Duration(seconds: 10),
+        );
+      } catch (_) {
+        pos = await Geolocator.getLastKnownPosition();
+      }
+
+      pos ??= Position(
+        latitude: -27.0288295,
+        longitude: -48.6355388,
+        timestamp: DateTime.now(),
+        accuracy: 0,
+        altitude: 0,
+        altitudeAccuracy: 0,
+        heading: 0,
+        headingAccuracy: 0,
+        speed: 0,
+        speedAccuracy: 0,
+      );
+
       final auth = context.read<AuthProvider>();
       final token = auth.user?.token ?? '';
       final id = auth.user?.id ?? '';
+
+      print('=== CHECK-IN DATA ===');
+      print('Token: $token');
+      print('ID: $id');
+      print('Lat: ${pos.latitude} | Lng: ${pos.longitude}');
 
       final eventos = await EventoService.buscarEventos(
         token: token,
@@ -96,6 +139,7 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
         _refreshing = false;
       });
     } catch (e) {
+      print('Erro em _buscarEventos: $e');
       setState(() {
         _erro = 'Não foi possível carregar os locais.';
         _loading = false;
@@ -112,10 +156,12 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
       confirmText: 'Confirmar',
       cancelText: 'Voltar',
       onConfirm: () async {
+        final tipo = item.mesaObrigatoria ? 'restaurante' : 'evento';
+
         await context.read<StorageProvider>().setLocation(
           item.id,
           item.name,
-          item.tipo,
+          tipo,
         );
         if (!mounted) return;
         Navigator.of(

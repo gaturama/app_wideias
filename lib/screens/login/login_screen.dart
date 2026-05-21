@@ -12,9 +12,9 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _emailCtrl  = TextEditingController();
-  final _senhaCtrl  = TextEditingController();
-  bool _showSenha   = false;
+  final _emailCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
+  bool _showSenha = false;
 
   @override
   void dispose() {
@@ -38,8 +38,8 @@ class _LoginScreenState extends State<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_validar()) return;
 
-    final auth  = context.read<AuthProvider>();
-    final erro  = await auth.login(
+    final auth = context.read<AuthProvider>();
+    final erro = await auth.login(
       _emailCtrl.text.trim().toLowerCase(),
       _senhaCtrl.text.trim(),
     );
@@ -49,18 +49,14 @@ class _LoginScreenState extends State<LoginScreen> {
     if (erro == null) {
       CustomAlert.show(
         context,
-        title:       'Bem vindo!',
-        message:     'Login realizado com sucesso',
+        title: 'Bem vindo!',
+        message: 'Login realizado com sucesso',
         confirmText: 'OK',
-        onConfirm:   () => Navigator.of(context)
-            .pushReplacementNamed('/home'),
+        onConfirm: () =>
+            Navigator.of(context).pushReplacementNamed('/localizacao'),
       );
     } else {
-      CustomAlert.show(
-        context,
-        title:   'Erro na autenticação',
-        message: erro,
-      );
+      CustomAlert.show(context, title: 'Erro na autenticação', message: erro);
     }
   }
 
@@ -73,12 +69,7 @@ class _LoginScreenState extends State<LoginScreen> {
       body: KeyboardDismissOnTap(
         child: SingleChildScrollView(
           padding: EdgeInsets.zero,
-          child: Column(
-            children: [
-              _buildHeroCard(),
-              _buildForm(loading),
-            ],
-          ),
+          child: Column(children: [_buildHeroCard(), _buildForm(loading)]),
         ),
       ),
     );
@@ -87,7 +78,7 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildHeroCard() {
     return Container(
       width: double.infinity,
-      margin: const EdgeInsets.fromLTRB(20, 60, 20, 0),
+      margin: const EdgeInsets.fromLTRB(20, 120, 20, 0),
       decoration: BoxDecoration(
         color: AppColors.bluePrimary,
         borderRadius: BorderRadius.circular(24),
@@ -96,54 +87,52 @@ class _LoginScreenState extends State<LoginScreen> {
       child: Stack(
         children: [
           Positioned(
-            top: -30, right: -30,
-            child: _circle(120, AppColors.circleDeco1),
+            top: -50,
+            right: -30,
+            child: _circle(150, AppColors.circleDeco1),
           ),
           Positioned(
-            bottom: -20, left: -20,
-            child: _circle(90, AppColors.circleDeco2),
+            bottom: -20,
+            left: -20,
+            child: _circle(110, AppColors.circleDeco2),
           ),
-          Positioned(
-            top: 10, left: -40,
-            child: _circle(80, AppColors.circleDeco2),
-          ),
-
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Column(
-              children: [
-                Image.asset(
-                  'assets/images/ic_logo_wideias.png',
-                  height: 80,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Icon(
-                    Icons.storefront,
-                    size: 80,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                RichText(
-                  textAlign: TextAlign.center,
-                  text: const TextSpan(
-                    text: 'Peça sem sair do lugar.\n',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 14,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    'assets/images/ic_logo_wideias.png',
+                    width: 300,
+                    height: 80,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => const Icon(
+                      Icons.storefront,
+                      size: 80,
+                      color: Colors.white,
                     ),
-                    children: [
-                      TextSpan(
-                        text: 'Seu pedido chega até você.',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                          fontSize: 15,
-                        ),
-                      ),
-                    ],
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  RichText(
+                    textAlign: TextAlign.center,
+                    text: const TextSpan(
+                      text: 'Peça sem sair do lugar.\n',
+                      style: TextStyle(color: Colors.white70, fontSize: 14),
+                      children: [
+                        TextSpan(
+                          text: 'Seu pedido chega até você.',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -159,21 +148,21 @@ class _LoginScreenState extends State<LoginScreen> {
         children: [
           _buildLabel('E-MAIL'),
           _buildInput(
-            controller:  _emailCtrl,
-            hint:        'user@email.com',
-            icon:        Icons.mail_outline,
-            keyboard:    TextInputType.emailAddress,
-            enabled:     !loading,
+            controller: _emailCtrl,
+            hint: 'user@email.com',
+            icon: Icons.mail_outline,
+            keyboard: TextInputType.emailAddress,
+            enabled: !loading,
           ),
           const SizedBox(height: 16),
 
           _buildLabel('SENHA'),
           _buildInput(
-            controller:   _senhaCtrl,
-            hint:         '••••••••',
-            icon:         Icons.lock_outline,
-            obscure:      !_showSenha,
-            enabled:      !loading,
+            controller: _senhaCtrl,
+            hint: '••••••••',
+            icon: Icons.lock_outline,
+            obscure: !_showSenha,
+            enabled: !loading,
             suffix: IconButton(
               icon: Icon(
                 _showSenha ? Icons.visibility_off : Icons.visibility,
@@ -190,10 +179,7 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () {},
               child: const Text(
                 'Esqueci minha senha',
-                style: TextStyle(
-                  color: AppColors.bluePrimary,
-                  fontSize: 13,
-                ),
+                style: TextStyle(color: AppColors.bluePrimary, fontSize: 13),
               ),
             ),
           ),
@@ -238,9 +224,10 @@ class _LoginScreenState extends State<LoginScreen> {
                 const Expanded(child: Divider(color: AppColors.cardBorder)),
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text('ou',
-                      style: TextStyle(
-                          color: AppColors.textEmpty, fontSize: 13)),
+                  child: Text(
+                    'ou',
+                    style: TextStyle(color: AppColors.textEmpty, fontSize: 13),
+                  ),
                 ),
                 const Expanded(child: Divider(color: AppColors.cardBorder)),
               ],
@@ -255,7 +242,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   : () => Navigator.of(context).pushNamed('/cadastro'),
               style: OutlinedButton.styleFrom(
                 side: const BorderSide(
-                    color: AppColors.bluePrimary, width: 1.5),
+                  color: AppColors.bluePrimary,
+                  width: 1.5,
+                ),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(14),
                 ),
@@ -277,25 +266,25 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _buildLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(
-          text,
-          style: const TextStyle(
-            fontSize: 11,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-            color: AppColors.textSection,
-          ),
-        ),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.2,
+        color: AppColors.textSection,
+      ),
+    ),
+  );
 
   Widget _buildInput({
     required TextEditingController controller,
     required String hint,
     required IconData icon,
     TextInputType keyboard = TextInputType.text,
-    bool obscure  = false,
-    bool enabled  = true,
+    bool obscure = false,
+    bool enabled = true,
     Widget? suffix,
   }) {
     return Container(
@@ -312,18 +301,18 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
           Expanded(
             child: TextField(
-              controller:    controller,
-              keyboardType:  keyboard,
-              obscureText:   obscure,
-              enabled:       enabled,
+              controller: controller,
+              keyboardType: keyboard,
+              obscureText: obscure,
+              enabled: enabled,
               style: const TextStyle(
                 fontSize: 14,
                 color: AppColors.textPrimary,
               ),
               decoration: InputDecoration(
-                hintText:      hint,
-                hintStyle:     const TextStyle(color: AppColors.textEmpty),
-                border:        InputBorder.none,
+                hintText: hint,
+                hintStyle: const TextStyle(color: AppColors.textEmpty),
+                border: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 14),
               ),
             ),
@@ -335,10 +324,10 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Widget _circle(double size, Color color) => Container(
-        width: size,
-        height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }
 
 class KeyboardDismissOnTap extends StatelessWidget {
@@ -347,7 +336,7 @@ class KeyboardDismissOnTap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => GestureDetector(
-        onTap: () => FocusScope.of(context).unfocus(),
-        child: child,
-      );
+    onTap: () => FocusScope.of(context).unfocus(),
+    child: child,
+  );
 }

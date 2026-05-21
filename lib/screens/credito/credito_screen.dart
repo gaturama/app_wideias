@@ -21,7 +21,11 @@ class _CreditoScreenState extends State<CreditoScreen> {
   static const _valoresRapidos = [20.0, 50.0, 100.0];
   static const _metodos = [
     {'key': 'PIX', 'label': 'PIX', 'icon': Icons.pix},
-    {'key': 'Google Pay', 'label': 'Google Pay', 'icon': Icons.g_mobiledata},
+    {
+      'key': 'Google Pay',
+      'label': 'Google Pay',
+      'icon': Icons.g_mobiledata_outlined,
+    },
     {'key': 'Samsung Pay', 'label': 'Samsung Pay', 'icon': Icons.phone_android},
   ];
 
@@ -156,16 +160,18 @@ class _CreditoScreenState extends State<CreditoScreen> {
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
-            top: -20,
-            right: -30,
-            child: _circle(140, AppColors.circleDeco1),
+            top: -55,
+            right: -55,
+            child: _circle(150, AppColors.circleDeco1),
           ),
+
           Positioned(
-            bottom: -20,
-            left: -30,
-            child: _circle(100, AppColors.circleDeco2),
+            bottom: -45,
+            left: -45,
+            child: _circle(110, AppColors.circleDeco2),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,

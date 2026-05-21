@@ -16,18 +16,16 @@ class QrCodeScreen extends StatelessWidget {
       );
     }
 
-    final pedidoId   = args['pedidoId']?.toString()              ?? '';
-    final usuario    = args['usuario']?.toString()               ?? '';
-    final valorTotal = (args['valorTotal'] as num?)?.toDouble()  ?? 0.0;
-    final produtos   = (args['produtos'] as List?)
-            ?.map((e) => e.toString())
-            .toList() ??
-        [];
+    final pedidoId = args['pedidoId']?.toString() ?? '';
+    final usuario = args['usuario']?.toString() ?? '';
+    final valorTotal = (args['valorTotal'] as num?)?.toDouble() ?? 0.0;
+    final produtos =
+        (args['produtos'] as List?)?.map((e) => e.toString()).toList() ?? [];
 
     final qrData = jsonEncode({
-      'pedidoId':   pedidoId,
-      'usuario':    usuario,
-      'produtos':   produtos,
+      'pedidoId': pedidoId,
+      'usuario': usuario,
+      'produtos': produtos,
       'valorTotal': valorTotal,
     });
 
@@ -68,9 +66,9 @@ class QrCodeScreen extends StatelessWidget {
                         ],
                       ),
                       child: QrImageView(
-                        data:            qrData,
-                        version:         QrVersions.auto,
-                        size:            220,
+                        data: qrData,
+                        version: QrVersions.auto,
+                        size: 220,
                         backgroundColor: Colors.white,
                       ),
                     ),
@@ -108,21 +106,29 @@ class QrCodeScreen extends StatelessWidget {
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Positioned(top: -20, right: -30,
-              child: _circle(120, AppColors.circleDeco1)),
+          Positioned(
+            top: -75,
+            right: -70,
+            child: _circle(120, AppColors.circleDeco1),
+          ),
           Row(
             children: [
               GestureDetector(
                 onTap: () => Navigator.of(context).pop(),
                 child: Container(
-                  width: 36, height: 36,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     color: Colors.white24,
                     borderRadius: BorderRadius.circular(10),
                   ),
-                  child: const Icon(Icons.arrow_back,
-                      color: Colors.white, size: 20),
+                  child: const Icon(
+                    Icons.arrow_back,
+                    color: Colors.white,
+                    size: 20,
+                  ),
                 ),
               ),
               const Expanded(
@@ -145,7 +151,8 @@ class QrCodeScreen extends StatelessWidget {
   }
 
   Widget _circle(double size, Color color) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }

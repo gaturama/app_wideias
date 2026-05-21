@@ -4,6 +4,7 @@ class LocalizacaoModel {
   final String address;
   final String? description;
   final String tipo;
+  final bool mesaObrigatoria;
 
   LocalizacaoModel({
     required this.id,
@@ -11,25 +12,30 @@ class LocalizacaoModel {
     required this.address,
     this.description,
     this.tipo = 'evento',
+    this.mesaObrigatoria = false,
   });
 
   factory LocalizacaoModel.fromJson(Map<String, dynamic> json) {
-    return LocalizacaoModel(
-      id: json['ID']?.toString() ?? json['id']?.toString() ?? '',
-      name: json['Evento']?.toString() ?? json['name']?.toString() ?? '',
-      address: _buildAddress(json),
-      description: json['Local']?.toString() ?? json['description']?.toString(),
-      tipo: 'evento',
-    );
-  }
-
-  static String _buildAddress(Map<String, dynamic> json) {
     final local = json['Local']?.toString() ?? '';
     final cidade = json['Cidade']?.toString() ?? '';
     final estado = json['Estado']?.toString() ?? '';
-    final address = json['address']?.toString() ?? '';
-    if (address.isNotEmpty) return address;
-    if (cidade.isNotEmpty) return '$local — $cidade, $estado';
-    return local;
+
+    String address = json['address']?.toString() ?? '';
+    if (address.isEmpty) {
+      if (cidade.isNotEmpty) {
+        address = '$local - $cidade, $estado';
+      } else {
+        address = local;
+      }
+    }
+
+    return LocalizacaoModel(
+      id: json['ID']?.toString() ?? json['id']?.toString() ?? '',
+      name: json['Evento']?.toString() ?? json['name']?.toString() ?? '',
+      address: address,
+      description: local.isNotEmpty ? local: null,
+      tipo: 'evento',
+      mesaObrigatoria: json['MesaObrigatoria']?.toString() == 'S',
+    );
   }
 }

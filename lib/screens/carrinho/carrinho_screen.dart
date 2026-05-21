@@ -33,11 +33,9 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
     super.dispose();
   }
 
-  double get _total =>
-      _cart.fold(0.0, (sum, item) => sum + item.precoTotal);
+  double get _total => _cart.fold(0.0, (sum, item) => sum + item.precoTotal);
 
-  int get _totalItens =>
-      _cart.fold(0, (sum, item) => sum + item.qty);
+  int get _totalItens => _cart.fold(0, (sum, item) => sum + item.qty);
 
   void _aumentar(String id) {
     setState(() {
@@ -64,51 +62,59 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
 
   void _editarItem(CartItemModel item) {
     final idx = _cart.indexOf(item);
-    Navigator.of(context).pushNamed(
-      '/descricao-produto',
-      arguments: {
-        'produto':       item,
-        'produtoEditado': item,
-        'cart':          _cart,
-        'editar':        true,
-        'editIndex':     idx,
-        'tipoLocal':
-            context.read<StorageProvider>().tipoLocal,
-        'locationId':
-            context.read<StorageProvider>().locationId,
-      },
-    ).then((result) {
-      if (result is Map && result['cart'] != null) {
-        setState(() => _cart = List<CartItemModel>.from(result['cart']));
-      }
-    });
+    Navigator.of(context)
+        .pushNamed(
+          '/descricao-produto',
+          arguments: {
+            'produto': item,
+            'produtoEditado': item,
+            'cart': _cart,
+            'editar': true,
+            'editIndex': idx,
+            'tipoLocal': context.read<StorageProvider>().tipoLocal,
+            'locationId': context.read<StorageProvider>().locationId,
+          },
+        )
+        .then((result) {
+          if (result is Map && result['cart'] != null) {
+            setState(() => _cart = List<CartItemModel>.from(result['cart']));
+          }
+        });
   }
 
   void _proximo() {
     if (_cart.isEmpty) {
-      CustomAlert.show(context,
-          title: 'Carrinho vazio',
-          message: 'Adicione produtos antes de continuar');
+      CustomAlert.show(
+        context,
+        title: 'Carrinho vazio',
+        message: 'Adicione produtos antes de continuar',
+      );
       return;
     }
-    final storage  = context.read<StorageProvider>();
+    final storage = context.read<StorageProvider>();
     final tipoLocal = storage.tipoLocal;
 
     if (tipoLocal == 'restaurante') {
-      Navigator.of(context).pushNamed('/mesa', arguments: {
-        'cart':       _cart,
-        'tipoLocal':  tipoLocal,
-        'locationId': storage.locationId,
-        'observacoes': _obsCtrl.text,
-        'total':      _total,
-      });
+      Navigator.of(context).pushNamed(
+        '/mesa',
+        arguments: {
+          'cart': _cart,
+          'tipoLocal': tipoLocal,
+          'locationId': storage.locationId,
+          'observacoes': _obsCtrl.text,
+          'total': _total,
+        },
+      );
     } else {
-      Navigator.of(context).pushNamed('/pagamento', arguments: {
-        'cart':       _cart,
-        'locationId': storage.locationId,
-        'observacoes': _obsCtrl.text,
-        'mesa':       null,
-      });
+      Navigator.of(context).pushNamed(
+        '/pagamento',
+        arguments: {
+          'cart': _cart,
+          'locationId': storage.locationId,
+          'observacoes': _obsCtrl.text,
+          'mesa': null,
+        },
+      );
     }
   }
 
@@ -141,69 +147,97 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
   Widget _buildHeader() {
     return Container(
       color: AppColors.bluePrimary,
-      padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
-          Positioned(top: -20, right: -30,
-              child: _circle(130, AppColors.circleDeco1)),
-          Positioned(bottom: -20, left: -30,
-              child: _circle(90, AppColors.circleDeco2)),
-          Column(
-            children: [
-              Row(
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.of(context).pop(),
-                    child: Container(
-                      width: 36, height: 36,
-                      decoration: BoxDecoration(
-                        color: Colors.white24,
-                        borderRadius: BorderRadius.circular(10),
+          Positioned(
+            top: -55,
+            right: -55,
+            child: _circle(150, AppColors.circleDeco1),
+          ),
+
+          Positioned(
+            bottom: -45,
+            left: -45,
+            child: _circle(110, AppColors.circleDeco2),
+          ),
+
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
+            child: Column(
+              children: [
+                Row(
+                  children: [
+                    GestureDetector(
+                      onTap: () => Navigator.of(context).pop(),
+                      child: Container(
+                        width: 36,
+                        height: 36,
+                        decoration: BoxDecoration(
+                          color: Colors.white24,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: const Icon(
+                          Icons.arrow_back,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back,
-                          color: Colors.white, size: 20),
                     ),
-                  ),
-                  const Expanded(
-                    child: Text('Carrinho',
+
+                    const Expanded(
+                      child: Text(
+                        'Carrinho',
                         textAlign: TextAlign.center,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                        )),
-                  ),
-                  const SizedBox(width: 36),
-                ],
-              ),
-              if (_cart.isNotEmpty) ...[
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.shopping_bag_outlined,
-                          color: AppColors.bluePrimary, size: 15),
-                      const SizedBox(width: 6),
-                      Text(
-                        '$_totalItens item${_totalItens > 1 ? 's' : ''} · R\$ ${_total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          color: AppColors.bluePrimary,
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+
+                    const SizedBox(width: 36),
+                  ],
                 ),
+
+                if (_cart.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.shopping_bag_outlined,
+                          color: AppColors.bluePrimary,
+                          size: 15,
+                        ),
+
+                        const SizedBox(width: 6),
+
+                        Text(
+                          '$_totalItens item${_totalItens > 1 ? 's' : ''} · R\$ ${_total.toStringAsFixed(2)}',
+                          style: const TextStyle(
+                            color: AppColors.bluePrimary,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ],
       ),
@@ -215,11 +249,16 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.shopping_bag_outlined,
-              size: 52, color: AppColors.textEmpty),
+          const Icon(
+            Icons.shopping_bag_outlined,
+            size: 52,
+            color: AppColors.textEmpty,
+          ),
           const SizedBox(height: 12),
-          const Text('Seu carrinho está vazio',
-              style: TextStyle(color: AppColors.textEmpty, fontSize: 15)),
+          const Text(
+            'Seu carrinho está vazio',
+            style: TextStyle(color: AppColors.textEmpty, fontSize: 15),
+          ),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: () => Navigator.of(context).pop(),
@@ -251,44 +290,60 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
       child: Row(
         children: [
           Container(
-            width: 56, height: 56,
+            width: 56,
+            height: 56,
             margin: const EdgeInsets.only(right: 12),
             decoration: BoxDecoration(
               color: AppColors.badgeBg,
               borderRadius: BorderRadius.circular(12),
             ),
-            child: const Icon(Icons.fastfood_outlined,
-                color: AppColors.textEmpty, size: 24),
+            child: const Icon(
+              Icons.fastfood_outlined,
+              color: AppColors.textEmpty,
+              size: 24,
+            ),
           ),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(item.name,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    )),
+                Text(
+                  item.name,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
                 if (item.ingredientesRemovidos.isNotEmpty)
-                  ...item.ingredientesRemovidos.map((e) => Text(
-                        '− Sem ${e.name}',
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.redError),
-                      )),
-                if (item.adicionais.isNotEmpty)
-                  ...item.adicionais.map((e) => Text(
-                        '+ ${e.nome} (R\$ ${e.preco.toStringAsFixed(2)})',
-                        style: const TextStyle(
-                            fontSize: 11, color: AppColors.greenSuccess),
-                      )),
-                if (item.observacao != null && item.observacao!.isNotEmpty)
-                  Text('Obs: ${item.observacao}',
+                  ...item.ingredientesRemovidos.map(
+                    (e) => Text(
+                      '− Sem ${e.name}',
                       style: const TextStyle(
                         fontSize: 11,
-                        color: AppColors.textEmpty,
-                        fontStyle: FontStyle.italic,
-                      )),
+                        color: AppColors.redError,
+                      ),
+                    ),
+                  ),
+                if (item.adicionais.isNotEmpty)
+                  ...item.adicionais.map(
+                    (e) => Text(
+                      '+ ${e.nome} (R\$ ${e.preco.toStringAsFixed(2)})',
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: AppColors.greenSuccess,
+                      ),
+                    ),
+                  ),
+                if (item.observacao != null && item.observacao!.isNotEmpty)
+                  Text(
+                    'Obs: ${item.observacao}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textEmpty,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
                 const SizedBox(height: 4),
                 Row(
                   children: [
@@ -305,17 +360,21 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
                       onTap: () => _editarItem(item),
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.badgeBg,
                           borderRadius: BorderRadius.circular(20),
                         ),
-                        child: const Text('Editar',
-                            style: TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.bold,
-                              color: AppColors.bluePrimary,
-                            )),
+                        child: const Text(
+                          'Editar',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.bluePrimary,
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -328,12 +387,14 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
               _qtyBtn(Icons.add, () => _aumentar(item.cartEntryId)),
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 4),
-                child: Text('${item.qty}',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    )),
+                child: Text(
+                  '${item.qty}',
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.textPrimary,
+                  ),
+                ),
               ),
               _qtyBtn(Icons.remove, () => _diminuir(item.cartEntryId)),
             ],
@@ -344,16 +405,17 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
   }
 
   Widget _qtyBtn(IconData icon, VoidCallback onTap) => GestureDetector(
-        onTap: onTap,
-        child: Container(
-          width: 30, height: 30,
-          decoration: BoxDecoration(
-            color: AppColors.badgeBg,
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Icon(icon, color: AppColors.bluePrimary, size: 16),
-        ),
-      );
+    onTap: onTap,
+    child: Container(
+      width: 30,
+      height: 30,
+      decoration: BoxDecoration(
+        color: AppColors.badgeBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Icon(icon, color: AppColors.bluePrimary, size: 16),
+    ),
+  );
 
   Widget _buildAddMore() {
     return Padding(
@@ -364,13 +426,20 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
           minimumSize: const Size.fromHeight(44),
           side: const BorderSide(color: AppColors.bluePrimary, width: 1.5),
           shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(14)),
+            borderRadius: BorderRadius.circular(14),
+          ),
         ),
-        icon: const Icon(Icons.add_circle_outline,
-            color: AppColors.bluePrimary),
-        label: const Text('Adicionar mais produtos',
-            style: TextStyle(color: AppColors.bluePrimary,
-                fontWeight: FontWeight.bold)),
+        icon: const Icon(
+          Icons.add_circle_outline,
+          color: AppColors.bluePrimary,
+        ),
+        label: const Text(
+          'Adicionar mais produtos',
+          style: TextStyle(
+            color: AppColors.bluePrimary,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
       ),
     );
   }
@@ -381,13 +450,15 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text('OBSERVAÇÕES',
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.bold,
-                letterSpacing: 1.2,
-                color: AppColors.textSection,
-              )),
+          const Text(
+            'OBSERVAÇÕES',
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+              color: AppColors.textSection,
+            ),
+          ),
           const SizedBox(height: 8),
           Container(
             decoration: BoxDecoration(
@@ -397,7 +468,7 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
             ),
             child: TextField(
               controller: _obsCtrl,
-              maxLines:   3,
+              maxLines: 3,
               decoration: const InputDecoration(
                 hintText: 'Alguma observação para o pedido?',
                 hintStyle: TextStyle(color: AppColors.textEmpty),
@@ -420,15 +491,18 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Total',
-                  style: TextStyle(
-                      fontSize: 12, color: AppColors.textSection)),
-              Text('R\$ ${_total.toStringAsFixed(2)}',
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  )),
+              const Text(
+                'Total',
+                style: TextStyle(fontSize: 12, color: AppColors.textSection),
+              ),
+              Text(
+                'R\$ ${_total.toStringAsFixed(2)}',
+                style: const TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
             ],
           ),
           const SizedBox(width: 16),
@@ -440,14 +514,13 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
                 foregroundColor: Colors.white,
                 minimumSize: const Size.fromHeight(52),
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
                 elevation: 0,
               ),
               icon: const Icon(Icons.arrow_forward, size: 18),
               label: Text(
-                tipoLocal == 'restaurante'
-                    ? 'Escolher Mesa'
-                    : 'Pagamento',
+                tipoLocal == 'restaurante' ? 'Escolher Mesa' : 'Pagamento',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -458,7 +531,8 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
   }
 
   Widget _circle(double size, Color color) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }

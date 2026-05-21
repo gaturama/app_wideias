@@ -4,6 +4,7 @@ import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedidos_provider.dart';
 import '../../widgets/bottom.nav_bar.dart';
+
 class HistoricoScreen extends StatefulWidget {
   const HistoricoScreen({super.key});
 
@@ -72,16 +73,18 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       width: 500,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
-            top: -20,
-            right: -30,
-            child: _circle(130, AppColors.circleDeco1),
+            top: -55,
+            right: -65,
+            child: _circle(150, AppColors.circleDeco1),
           ),
+
           Positioned(
-            bottom: -20,
-            left: -30,
-            child: _circle(90, AppColors.circleDeco2),
+            bottom: -45,
+            left: -45,
+            child: _circle(110, AppColors.circleDeco2),
           ),
           const Column(
             crossAxisAlignment: CrossAxisAlignment.start,

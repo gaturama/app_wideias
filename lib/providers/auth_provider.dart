@@ -35,18 +35,16 @@ class AuthProvider extends ChangeNotifier {
 
       if (result.sucesso && result.dados != null) {
         final dados = result.dados!;
-        final usuario = dados['usuario'] as Map<String, dynamic>? ?? {};
-        final token = dados['token']?.toString() ?? 'token_placeholder';
 
-        print('Usuario retornado: $usuario');
-        print('Token: $token');
+        print('Usuario retornado: ${dados['Nome']}');
+        print('Token: ${dados['Token']}');
 
         _user = UserModel(
-          id: usuario['IDCliente']?.toString() ?? '',
-          nome: usuario['Nome']?.toString() ?? '',
-          email: usuario['Email']?.toString() ?? email,
-          telefone: usuario['Telefone']?.toString() ?? '',
-          token: token,
+          id: dados['IDCliente']?.toString() ?? '',
+          nome: dados['Nome']?.toString() ?? '',
+          email: dados['Email']?.toString() ?? email,
+          telefone: dados['Telefone']?.toString() ?? '',
+          token: dados['Token']?.toString() ?? '', 
         );
 
         await _salvarSessao(_user!);

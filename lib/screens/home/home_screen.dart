@@ -153,16 +153,17 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
       clipBehavior: Clip.hardEdge,
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
-            top: -30,
-            right: -30,
-            child: _circle(110, AppColors.circleDeco1),
+            top: -75,
+            right: -70,
+            child: _circle(150, AppColors.circleDeco1),
           ),
           Positioned(
-            bottom: -30,
-            left: -30,
-            child: _circle(80, AppColors.circleDeco2),
+            bottom: -65,
+            left: -45,
+            child: _circle(110, AppColors.circleDeco2),
           ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -245,7 +246,15 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Widget _buildCard(OrderItemModel item) {
     return GestureDetector(
-      onTap: () => Navigator.of(context).pushNamed('/qr-code', arguments: item),
+      onTap: () => Navigator.of(context).pushNamed(
+        '/qr-code',
+        arguments: {
+          'pedidoId': item.orderId,
+          'usuario': item.product?.name ?? 'Produto',
+          'valorTotal': item.total,
+          'produtos': ['${item.quantity}x ${item.product?.name ?? 'Produto'}'],
+        },
+      ),
       child: Container(
         margin: const EdgeInsets.only(bottom: 10),
         padding: const EdgeInsets.all(14),
