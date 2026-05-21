@@ -14,11 +14,11 @@ class CadastroScreen extends StatefulWidget {
 }
 
 class _CadastroScreenState extends State<CadastroScreen> {
-  final _nomeCtrl       = TextEditingController();
-  final _cpfCtrl        = TextEditingController();
-  final _emailCtrl      = TextEditingController();
-  final _senhaCtrl      = TextEditingController();
-  final _telefoneCtrl   = TextEditingController();
+  final _nomeCtrl = TextEditingController();
+  final _cpfCtrl = TextEditingController();
+  final _emailCtrl = TextEditingController();
+  final _senhaCtrl = TextEditingController();
+  final _telefoneCtrl = TextEditingController();
   final _nascimentoCtrl = TextEditingController();
   bool _showSenha = false;
 
@@ -34,15 +34,14 @@ class _CadastroScreenState extends State<CadastroScreen> {
   }
 
   bool _validar() {
-    final nome       = _nomeCtrl.text.trim();
-    final cpf        = _cpfCtrl.text.trim();
-    final email      = _emailCtrl.text.trim();
-    final senha      = _senhaCtrl.text;
-    final telefone   = _telefoneCtrl.text.trim();
+    final nome = _nomeCtrl.text.trim();
+    final cpf = _cpfCtrl.text.trim();
+    final email = _emailCtrl.text.trim();
+    final senha = _senhaCtrl.text;
+    final telefone = _telefoneCtrl.text.trim();
     final nascimento = _nascimentoCtrl.text.trim();
 
-    if ([nome, cpf, email, senha, telefone, nascimento]
-        .any((v) => v.isEmpty)) {
+    if ([nome, cpf, email, senha, telefone, nascimento].any((v) => v.isEmpty)) {
       _alerta('Erro', 'Preencha todos os campos!');
       return false;
     }
@@ -50,8 +49,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
       _alerta('Erro', 'A senha deve ter pelo menos 4 caracteres!');
       return false;
     }
-    if (cpf.length != 11) {
-      _alerta('Erro', 'CPF inválido! Digite apenas números (11 dígitos)');
+    if (!_cpfValido(cpf)) {
+      _alerta('Erro', 'CPF inválido! Verifique os números digitados.');
       return false;
     }
     if (telefone.length < 10) {
@@ -66,16 +65,42 @@ class _CadastroScreenState extends State<CadastroScreen> {
     return true;
   }
 
+  bool _cpfValido(String cpf) {
+    cpf = cpf.replaceAll(RegExp(r'\D'), '');
+
+    if (cpf.length != 11) return false;
+
+    if (RegExp(r'^(\d)\1{10}$').hasMatch(cpf)) return false;
+
+    int soma = 0;
+    for (int i = 0; i < 9; i++) {
+      soma += int.parse(cpf[i]) * (10 - i);
+    }
+    int resto = (soma * 10) % 11;
+    if (resto == 10 || resto == 11) resto = 0;
+    if (resto != int.parse(cpf[9])) return false;
+
+    soma = 0;
+    for (int i = 0; i < 10; i++) {
+      soma += int.parse(cpf[i]) * (11 - i);
+    }
+    resto = (soma * 10) % 11;
+    if (resto == 10 || resto == 11) resto = 0;
+    if (resto != int.parse(cpf[10])) return false;
+
+    return true;
+  }
+
   Future<void> _handleCadastro() async {
     if (!_validar()) return;
 
     final auth = context.read<AuthProvider>();
     final erro = await auth.cadastrar(
-      nome:       _nomeCtrl.text.trim(),
-      cpf:        _cpfCtrl.text.trim(),
-      email:      _emailCtrl.text.trim().toLowerCase(),
-      senha:      _senhaCtrl.text,
-      telefone:   _telefoneCtrl.text.trim(),
+      nome: _nomeCtrl.text.trim(),
+      cpf: _cpfCtrl.text.trim(),
+      email: _emailCtrl.text.trim().toLowerCase(),
+      senha: _senhaCtrl.text,
+      telefone: _telefoneCtrl.text.trim(),
       nascimento: _nascimentoCtrl.text.trim(),
     );
 
@@ -84,11 +109,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
     if (erro == null) {
       CustomAlert.show(
         context,
-        title:       'Cadastro realizado!',
-        message:     'Bem vindo, ${_nomeCtrl.text.trim()}!',
+        title: 'Cadastro realizado!',
+        message: 'Bem vindo, ${_nomeCtrl.text.trim()}!',
         confirmText: 'Entrar',
-        onConfirm:   () => Navigator.of(context)
-            .pushReplacementNamed('/login'),
+        onConfirm: () => Navigator.of(context).pushReplacementNamed('/login'),
       );
     } else {
       _alerta('Erro no cadastro', erro);
@@ -115,43 +139,41 @@ class _CadastroScreenState extends State<CadastroScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     _buildField(
-                      label:      'NOME COMPLETO',
+                      label: 'NOME COMPLETO',
                       controller: _nomeCtrl,
-                      hint:       'Seu nome completo',
-                      icon:       Icons.person_outline,
+                      hint: 'Seu nome completo',
+                      icon: Icons.person_outline,
                       capitalize: TextCapitalization.words,
-                      enabled:    !loading,
+                      enabled: !loading,
                     ),
                     _buildField(
-                      label:      'CPF',
+                      label: 'CPF',
                       controller: _cpfCtrl,
-                      hint:       '12345678900',
-                      icon:       Icons.credit_card_outlined,
-                      keyboard:   TextInputType.number,
-                      maxLength:  11,
+                      hint: '12345678900',
+                      icon: Icons.credit_card_outlined,
+                      keyboard: TextInputType.number,
+                      maxLength: 11,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      enabled:    !loading,
+                      enabled: !loading,
                     ),
                     _buildField(
-                      label:      'E-MAIL',
+                      label: 'E-MAIL',
                       controller: _emailCtrl,
-                      hint:       'seu@email.com',
-                      icon:       Icons.mail_outline,
-                      keyboard:   TextInputType.emailAddress,
-                      enabled:    !loading,
+                      hint: 'seu@email.com',
+                      icon: Icons.mail_outline,
+                      keyboard: TextInputType.emailAddress,
+                      enabled: !loading,
                     ),
                     _buildField(
-                      label:      'SENHA',
+                      label: 'SENHA',
                       controller: _senhaCtrl,
-                      hint:       'Mínimo 4 caracteres',
-                      icon:       Icons.lock_outline,
-                      obscure:    !_showSenha,
-                      enabled:    !loading,
+                      hint: 'Mínimo 4 caracteres',
+                      icon: Icons.lock_outline,
+                      obscure: !_showSenha,
+                      enabled: !loading,
                       suffix: IconButton(
                         icon: Icon(
-                          _showSenha
-                              ? Icons.visibility_off
-                              : Icons.visibility,
+                          _showSenha ? Icons.visibility_off : Icons.visibility,
                           color: AppColors.textSection,
                           size: 20,
                         ),
@@ -160,21 +182,21 @@ class _CadastroScreenState extends State<CadastroScreen> {
                       ),
                     ),
                     _buildField(
-                      label:      'TELEFONE',
+                      label: 'TELEFONE',
                       controller: _telefoneCtrl,
-                      hint:       '47999999999',
-                      icon:       Icons.phone_outlined,
-                      keyboard:   TextInputType.phone,
-                      maxLength:  11,
+                      hint: '47999999999',
+                      icon: Icons.phone_outlined,
+                      keyboard: TextInputType.phone,
+                      maxLength: 11,
                       inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      enabled:    !loading,
+                      enabled: !loading,
                     ),
                     _buildField(
-                      label:      'DATA DE NASCIMENTO',
+                      label: 'DATA DE NASCIMENTO',
                       controller: _nascimentoCtrl,
-                      hint:       'AAAA-MM-DD',
-                      icon:       Icons.calendar_today_outlined,
-                      enabled:    !loading,
+                      hint: 'AAAA-MM-DD',
+                      icon: Icons.calendar_today_outlined,
+                      enabled: !loading,
                     ),
                     const SizedBox(height: 8),
 
@@ -192,7 +214,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
                         ),
                         child: loading
                             ? const SizedBox(
-                                width: 22, height: 22,
+                                width: 22,
+                                height: 22,
                                 child: CircularProgressIndicator(
                                   color: Colors.white,
                                   strokeWidth: 2.5,
@@ -253,11 +276,13 @@ class _CadastroScreenState extends State<CadastroScreen> {
       child: Stack(
         children: [
           Positioned(
-            top: -20, right: -30,
+            top: -20,
+            right: -30,
             child: _circle(140, AppColors.circleDeco1),
           ),
           Positioned(
-            bottom: -20, left: -30,
+            bottom: -20,
+            left: -30,
             child: _circle(100, AppColors.circleDeco2),
           ),
           Padding(
@@ -270,7 +295,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
                     GestureDetector(
                       onTap: () => Navigator.of(context).pop(),
                       child: Container(
-                        width: 36, height: 36,
+                        width: 36,
+                        height: 36,
                         decoration: BoxDecoration(
                           color: Colors.white24,
                           borderRadius: BorderRadius.circular(10),
@@ -317,10 +343,10 @@ class _CadastroScreenState extends State<CadastroScreen> {
     required TextEditingController controller,
     required String hint,
     required IconData icon,
-    TextInputType keyboard       = TextInputType.text,
+    TextInputType keyboard = TextInputType.text,
     TextCapitalization capitalize = TextCapitalization.none,
-    bool obscure                 = false,
-    bool enabled                 = true,
+    bool obscure = false,
+    bool enabled = true,
     int? maxLength,
     List<TextInputFormatter>? inputFormatters,
     Widget? suffix,
@@ -354,22 +380,22 @@ class _CadastroScreenState extends State<CadastroScreen> {
                 ),
                 Expanded(
                   child: TextField(
-                    controller:       controller,
-                    keyboardType:     keyboard,
+                    controller: controller,
+                    keyboardType: keyboard,
                     textCapitalization: capitalize,
-                    obscureText:      obscure,
-                    enabled:          enabled,
-                    maxLength:        maxLength,
-                    inputFormatters:  inputFormatters,
+                    obscureText: obscure,
+                    enabled: enabled,
+                    maxLength: maxLength,
+                    inputFormatters: inputFormatters,
                     style: const TextStyle(
                       fontSize: 14,
                       color: AppColors.textPrimary,
                     ),
                     decoration: InputDecoration(
-                      hintText:      hint,
-                      hintStyle:     const TextStyle(color: AppColors.textEmpty),
-                      border:        InputBorder.none,
-                      counterText:   '',
+                      hintText: hint,
+                      hintStyle: const TextStyle(color: AppColors.textEmpty),
+                      border: InputBorder.none,
+                      counterText: '',
                       contentPadding: const EdgeInsets.symmetric(vertical: 14),
                     ),
                   ),
@@ -384,7 +410,8 @@ class _CadastroScreenState extends State<CadastroScreen> {
   }
 
   Widget _circle(double size, Color color) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }

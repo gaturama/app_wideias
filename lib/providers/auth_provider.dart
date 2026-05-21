@@ -30,29 +30,40 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     notifyListeners();
 
-    final result = await AuthService.login(email: email, senha: senha);
-    _loading = false;
+    try {
+      final result = await AuthService.login(email: email, senha: senha);
 
-    if (result.sucesso && result.dados != null) {
-      final dados = result.dados!;
-      final usuario = dados['usuario'] as Map<String, dynamic>? ?? {};
-      final token = dados['token']?.toString() ?? 'token_placeholder';
+      if (result.sucesso && result.dados != null) {
+        final dados = result.dados!;
+        final usuario = dados['usuario'] as Map<String, dynamic>? ?? {};
+        final token = dados['token']?.toString() ?? 'token_placeholder';
 
-      _user = UserModel(
-        id: usuario['IDCliente']?.toString() ?? '',
-        nome: usuario['Nome']?.toString() ?? '',
-        email: usuario['Email']?.toString() ?? '',
-        telefone: usuario['Telefone']?.toString() ?? '',
-        token: token,
-      );
+        print('Usuario retornado: $usuario');
+        print('Token: $token');
 
-      await _salvarSessao(_user!);
+        _user = UserModel(
+          id: usuario['IDCliente']?.toString() ?? '',
+          nome: usuario['Nome']?.toString() ?? '',
+          email: usuario['Email']?.toString() ?? email,
+          telefone: usuario['Telefone']?.toString() ?? '',
+          token: token,
+        );
+
+        await _salvarSessao(_user!);
+        _loading = false;
+        notifyListeners();
+        return null;
+      }
+
+      _loading = false;
       notifyListeners();
-      return null;
+      return result.erro ?? 'Erro ao fazer login';
+    } catch (e) {
+      print('Exception no AuthProvider.login: $e');
+      _loading = false;
+      notifyListeners();
+      return 'Erro inesperado: $e';
     }
-
-    notifyListeners();
-    return result.erro ?? 'Erro ao fazer login';
   }
 
   Future<String?> cadastrar({
@@ -78,14 +89,14 @@ class AuthProvider extends ChangeNotifier {
 
     if (result.sucesso && result.dados != null) {
       final dados = result.dados!;
-      final usuario = dados['usuario'] as Map<String, dynamic>? ?? {};
       final token = dados['token']?.toString() ?? 'token_placeholder';
+      final userId = dados['IDCliente']?.toString() ?? '';
 
       _user = UserModel(
-        id: usuario['IDCliente']?.toString() ?? '',
-        nome: usuario['Nome']?.toString() ?? nome,
-        email: usuario['Email']?.toString() ?? email,
-        telefone: usuario['Telefone']?.toString() ?? telefone,
+        id: userId,
+        nome: nome,
+        email: email,
+        telefone: telefone,
         token: token,
       );
 

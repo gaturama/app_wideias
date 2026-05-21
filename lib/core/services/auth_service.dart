@@ -28,13 +28,22 @@ class AuthService {
       request.fields['email'] = email.trim().toLowerCase();
       request.fields['senha'] = senha;
 
+      print('=== LOGIN ===');
+      print('URL: $_baseUrl/login');
+      print('Email: $email');
+
       final streamed = await request.send().timeout(
         const Duration(seconds: 30),
       );
       final response = await http.Response.fromStream(streamed);
 
+      print('HTTP Status: ${response.statusCode}');
+      print('Body: ${response.body}');
+
       if (response.statusCode == 200) {
         final body = _parseBody(response.body);
+        print('Body parseado: $body');
+
         if (body == null) {
           return AuthResult(sucesso: false, erro: 'Resposta inválida da API');
         }
@@ -43,12 +52,22 @@ class AuthService {
         }
         return AuthResult(sucesso: true, dados: body);
       } else {
-        return AuthResult(
-          sucesso: false,
-          erro: 'Email ou senha incorretos (HTTP ${response.statusCode})',
-        );
+        String mensagemErro =
+            'Email ou senha incorretos (HTTP ${response.statusCode})';
+        try {
+          final bodyErro = _parseBody(response.body);
+          if (bodyErro != null) {
+            mensagemErro =
+                bodyErro['erro']?.toString() ??
+                bodyErro['message']?.toString() ??
+                mensagemErro;
+          }
+        } catch (_) {}
+        print('Erro login: $mensagemErro');
+        return AuthResult(sucesso: false, erro: mensagemErro);
       }
     } catch (e) {
+      print('Exception no login: $e');
       return AuthResult(sucesso: false, erro: _mensagemErro(e));
     }
   }
@@ -74,25 +93,49 @@ class AuthService {
       request.fields['telefone'] = telefone;
       request.fields['nascimento'] = nascimento;
 
+      print('==== CADASTRO ====');
+      print('URL: $_baseUrl/cadastrar');
+      print('Campos: ${request.fields}');
+
       final streamed = await request.send().timeout(
         const Duration(seconds: 30),
       );
       final response = await http.Response.fromStream(streamed);
 
-      if (response.statusCode == 200) {
+      print('HTTP Status: ${response.statusCode}');
+      print('Body: ${response.body}');
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
         final body = _parseBody(response.body);
+        print('Body parseado: $body');
+
         if (body == null) {
           return AuthResult(sucesso: false, erro: 'Resposta inválida da API');
         }
+
+        final resultado = body['Resultado']?.toString();
+        if (resultado == 'OK') {
+          return AuthResult(sucesso: true, dados: body);
+        }
+
         if (body['erro'] != null && body['erro'].toString().isNotEmpty) {
           return AuthResult(sucesso: false, erro: body['erro'].toString());
         }
         return AuthResult(sucesso: true, dados: body);
       } else {
-        return AuthResult(
-          sucesso: false,
-          erro: 'Erro ao cadastrar (HTTP ${response.statusCode})',
-        );
+        String mensagemErro = 'Erro ao cadastrar (HTTP ${response.statusCode})';
+        try {
+          final bodyErro = _parseBody(response.body);
+          if (bodyErro != null) {
+            mensagemErro =
+                bodyErro['erro']?.toString() ??
+                bodyErro['message']?.toString() ??
+                bodyErro['Resultado']?.toString() ??
+                mensagemErro;
+          }
+        } catch (_) {}
+        print('Erro: $mensagemErro');
+        return AuthResult(sucesso: false, erro: mensagemErro);
       }
     } catch (e) {
       return AuthResult(sucesso: false, erro: _mensagemErro(e));
@@ -101,12 +144,27 @@ class AuthService {
 
   static Map<String, dynamic>? _parseBody(String body) {
     try {
-      final trimmed = body.trim();
-      if (trimmed.startsWith('{') || trimmed.startsWith('[')) {
-        return jsonDecode(trimmed) as Map<String, dynamic>;
+      final trimmed = body.trim().replaceAll('\r', '').replaceAll('\n', '');
+
+      final jsonStart = trimmed.indexOf('{');
+      final jsonStartArray = trimmed.indexOf('[');
+
+      int start = -1;
+      if (jsonStart >= 0 && jsonStartArray >= 0) {
+        start = jsonStart < jsonStartArray ? jsonStart : jsonStartArray;
+      } else if (jsonStart >= 0) {
+        start = jsonStart;
+      } else if (jsonStartArray >= 0) {
+        start = jsonStartArray;
       }
-      return null;
-    } catch (_) {
+
+      if (start < 0) return null;
+
+      final jsonStr = trimmed.substring(start);
+      return jsonDecode(jsonStr) as Map<String, dynamic>;
+    } catch (e) {
+      print('Erro ao parsear body: $e');
+      print('Body original: $body');
       return null;
     }
   }

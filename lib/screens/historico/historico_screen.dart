@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/pedidos_provider.dart';
-
+import '../../widgets/bottom.nav_bar.dart';
 class HistoricoScreen extends StatefulWidget {
   const HistoricoScreen({super.key});
 
@@ -28,6 +28,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     final itens = context.watch<PedidosProvider>().historico;
 
     return Scaffold(
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 3),
       backgroundColor: AppColors.background,
       body: Column(
         children: [
@@ -69,6 +70,7 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
     return Container(
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
+      width: 500,
       child: Stack(
         children: [
           Positioned(

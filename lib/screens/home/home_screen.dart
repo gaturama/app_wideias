@@ -6,6 +6,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/pedidos_provider.dart';
 import '../../providers/storage_provider.dart';
 import '../../widgets/custom_alert.dart';
+import '../../widgets/bottom.nav_bar.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -26,14 +27,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> _carregarDados({bool refresh = false}) async {
     if (refresh) setState(() => _refreshing = true);
-
     final auth = context.read<AuthProvider>();
     final pedidos = context.read<PedidosProvider>();
-
-    if (auth.user != null) {
-      await pedidos.carregar(auth.user!.id);
-    }
-
+    if (auth.user != null) await pedidos.carregar(auth.user!.id);
     if (mounted)
       setState(() {
         _loading = false;
@@ -52,7 +48,6 @@ class _HomeScreenState extends State<HomeScreen> {
         final auth = context.read<AuthProvider>();
         final pedidos = context.read<PedidosProvider>();
         await pedidos.concluirItem(item.id, auth.user?.id ?? '');
-
         if (!mounted) return;
         CustomAlert.show(
           context,
@@ -78,6 +73,7 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.background,
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 0),
       body: Column(
         children: [
           _buildHeader(auth.user?.nome ?? ''),
@@ -149,7 +145,8 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildCardCredito(double credito) {
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.all(24),
+      width: 450,
       decoration: BoxDecoration(
         color: AppColors.bluePrimary,
         borderRadius: BorderRadius.circular(18),
@@ -211,7 +208,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
-
     if (itens.isEmpty) {
       return Center(
         child: Column(
@@ -236,7 +232,6 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
-
     return RefreshIndicator(
       color: AppColors.bluePrimary,
       onRefresh: () => _carregarDados(refresh: true),

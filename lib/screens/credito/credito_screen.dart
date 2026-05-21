@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../providers/storage_provider.dart';
 import '../../widgets/custom_alert.dart';
+import '../../widgets/bottom.nav_bar.dart';
 
 class CreditoScreen extends StatefulWidget {
   const CreditoScreen({super.key});
@@ -93,6 +94,7 @@ class _CreditoScreenState extends State<CreditoScreen> {
     final credito = context.watch<StorageProvider>().credito;
 
     return Scaffold(
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 2),
       backgroundColor: AppColors.background,
       body: Column(
         children: [

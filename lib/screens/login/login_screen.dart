@@ -53,7 +53,7 @@ class _LoginScreenState extends State<LoginScreen> {
         message:     'Login realizado com sucesso',
         confirmText: 'OK',
         onConfirm:   () => Navigator.of(context)
-            .pushReplacementNamed('/localizacao'),
+            .pushReplacementNamed('/home'),
       );
     } else {
       CustomAlert.show(
@@ -113,7 +113,7 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Column(
               children: [
                 Image.asset(
-                  '../../assets/ic_logo_wideias.png',
+                  'assets/images/ic_logo_wideias.png',
                   height: 80,
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const Icon(
@@ -184,11 +184,10 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Esqueci senha
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
-              onPressed: () {/* TODO: EsqueciSenhaDialog */},
+              onPressed: () {},
               child: const Text(
                 'Esqueci minha senha',
                 style: TextStyle(
@@ -199,7 +198,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Botão entrar
           SizedBox(
             height: 52,
             child: ElevatedButton(
@@ -233,7 +231,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Divider
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Row(
@@ -250,7 +247,6 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
 
-          // Botão cadastro
           SizedBox(
             height: 52,
             child: OutlinedButton(

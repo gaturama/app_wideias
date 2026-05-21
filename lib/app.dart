@@ -4,6 +4,7 @@ import 'core/constants/app_colors.dart';
 import 'providers/auth_provider.dart';
 import 'providers/storage_provider.dart';
 import 'providers/pedidos_provider.dart';
+import 'screens/splash/splash_screen.dart';
 import 'screens/login/login_screen.dart';
 import 'screens/cadastro/cadastro_screen.dart';
 import 'screens/localizacao/localizacao_screen.dart';
@@ -16,10 +17,10 @@ import 'screens/carrinho/carrinho_screen.dart';
 import 'screens/descricao_produto/descricao_produto_screen.dart';
 import 'screens/mesa/mesa_screen.dart';
 import 'screens/pagamento/pagamento_screen.dart';
-import 'screens/dividir_conta/dividir_conta_screen.dart';
 import 'screens/pix/pix_screen.dart';
 import 'screens/qr_code/qr_code_screen.dart';
 import 'screens/qr_scanner/qr_scanner_screen.dart';
+import 'screens/dividir_conta/dividir_conta_screen.dart';
 
 class App extends StatelessWidget {
   const App({super.key});
@@ -28,7 +29,7 @@ class App extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()..carregarSessao()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
         ChangeNotifierProvider(create: (_) => StorageProvider()..carregar()),
         ChangeNotifierProvider(create: (_) => PedidosProvider()),
       ],
@@ -40,7 +41,7 @@ class App extends StatelessWidget {
           scaffoldBackgroundColor: AppColors.background,
           fontFamily: 'Roboto',
         ),
-        initialRoute: '/login',
+        home: const SplashScreen(),
         routes: {
           '/login': (_) => const LoginScreen(),
           '/cadastro': (_) => const CadastroScreen(),
@@ -54,10 +55,10 @@ class App extends StatelessWidget {
           '/descricao-produto': (_) => const DescricaoProdutoScreen(),
           '/mesa': (_) => const MesaScreen(),
           '/pagamento': (_) => const PagamentoScreen(),
-          '/dividir-conta': (_) => const DividirContaScreen(),
-          '/pix':        (_) => const PixScreen(),
-          '/qr-code':    (_) => const QrCodeScreen(),
+          '/pix': (_) => const PixScreen(),
+          '/qr-code': (_) => const QrCodeScreen(),
           '/qr-scanner': (_) => const QrScannerScreen(),
+          '/dividir-conta': (_) => const DividirContaScreen(),
         },
       ),
     );

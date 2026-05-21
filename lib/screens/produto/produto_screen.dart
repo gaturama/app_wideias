@@ -5,6 +5,7 @@ import '../../models/cart_item_model.dart';
 import '../../models/produto_model.dart';
 import '../../providers/storage_provider.dart';
 import '../../widgets/custom_alert.dart';
+import '../../widgets/bottom.nav_bar.dart';
 
 class ProdutoScreen extends StatefulWidget {
   const ProdutoScreen({super.key});
@@ -118,6 +119,7 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      bottomNavigationBar: const AppBottomNavBar(currentIndex: 1),
       backgroundColor: AppColors.background,
       body: Column(
         children: [
