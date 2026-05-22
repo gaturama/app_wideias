@@ -150,6 +150,7 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
 
   void _handleCheckIn(LocalizacaoModel item) {
     CustomAlert.show(
+      dialogContext: context,
       context,
       title: 'Confirme sua presença',
       message: 'Você selecionou: ${item.name}.\nConfirme para continuar.',
@@ -215,14 +216,15 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
+        clipBehavior: Clip.none,
         children: [
           Positioned(
-            top: -20,
-            right: -30,
+            top: -60,
+            right: -50,
             child: _circle(140, AppColors.circleDeco1),
           ),
           Positioned(
-            bottom: -20,
+            bottom: -60,
             left: -30,
             child: _circle(100, AppColors.circleDeco2),
           ),

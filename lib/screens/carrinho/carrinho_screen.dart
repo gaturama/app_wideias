@@ -85,6 +85,7 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
   void _proximo() {
     if (_cart.isEmpty) {
       CustomAlert.show(
+        dialogContext: context,
         context,
         title: 'Carrinho vazio',
         message: 'Adicione produtos antes de continuar',

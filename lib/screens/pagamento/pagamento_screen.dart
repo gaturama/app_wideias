@@ -87,6 +87,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   Future<void> _finalizarPagamento(String metodo) async {
     if (_cart.isEmpty) {
       CustomAlert.show(
+        dialogContext: context,
         context,
         title: 'Carrinho vazio',
         message: 'Adicione produtos antes de finalizar',
@@ -119,6 +120,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     if (!mounted) return;
 
     CustomAlert.show(
+      dialogContext: context,
       context,
       title: 'Pedido confirmado!',
       message:

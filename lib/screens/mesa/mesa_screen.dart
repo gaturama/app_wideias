@@ -14,11 +14,11 @@ class MesaScreen extends StatefulWidget {
 class _MesaScreenState extends State<MesaScreen> {
   final _mesaCtrl = TextEditingController();
 
-  List<CartItemModel> _cart      = [];
-  String?             _locationId;
-  String?             _tipoLocal;
-  String              _observacoes = '';
-  double              _total      = 0;
+  List<CartItemModel> _cart = [];
+  String? _locationId;
+  String? _tipoLocal;
+  String _observacoes = '';
+  double _total = 0;
 
   @override
   void initState() {
@@ -27,11 +27,11 @@ class _MesaScreenState extends State<MesaScreen> {
       final args = ModalRoute.of(context)?.settings.arguments as Map?;
       if (args == null) return;
       setState(() {
-        _cart        = List<CartItemModel>.from(args['cart'] ?? []);
-        _locationId  = args['locationId']?.toString();
-        _tipoLocal   = args['tipoLocal']?.toString();
+        _cart = List<CartItemModel>.from(args['cart'] ?? []);
+        _locationId = args['locationId']?.toString();
+        _tipoLocal = args['tipoLocal']?.toString();
         _observacoes = args['observacoes']?.toString() ?? '';
-        _total       = (args['total'] as num?)?.toDouble() ?? 0.0;
+        _total = (args['total'] as num?)?.toDouble() ?? 0.0;
       });
     });
   }
@@ -44,17 +44,23 @@ class _MesaScreenState extends State<MesaScreen> {
 
   void _confirmar() {
     if (_mesaCtrl.text.trim().isEmpty) {
-      CustomAlert.show(context,
-          title: 'Atenção',
-          message: 'Por favor, informe o número da mesa!');
+      CustomAlert.show(
+        context,
+        dialogContext: context,
+        title: 'Atenção',
+        message: 'Por favor, informe o número da mesa!',
+      );
       return;
     }
-    Navigator.of(context).pushNamed('/pagamento', arguments: {
-      'cart':       _cart,
-      'locationId': _locationId,
-      'observacoes': _observacoes,
-      'mesa':       _mesaCtrl.text.trim(),
-    });
+    Navigator.of(context).pushNamed(
+      '/pagamento',
+      arguments: {
+        'cart': _cart,
+        'locationId': _locationId,
+        'observacoes': _observacoes,
+        'mesa': _mesaCtrl.text.trim(),
+      },
+    );
   }
 
   @override
@@ -71,13 +77,17 @@ class _MesaScreenState extends State<MesaScreen> {
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Container(
-                    width: 72, height: 72,
+                    width: 72,
+                    height: 72,
                     decoration: BoxDecoration(
                       color: AppColors.badgeBg,
                       borderRadius: BorderRadius.circular(20),
                     ),
-                    child: const Icon(Icons.grid_view_outlined,
-                        color: AppColors.bluePrimary, size: 36),
+                    child: const Icon(
+                      Icons.grid_view_outlined,
+                      color: AppColors.bluePrimary,
+                      size: 36,
+                    ),
                   ),
                   const SizedBox(height: 20),
                   const Text(
@@ -94,7 +104,9 @@ class _MesaScreenState extends State<MesaScreen> {
                     'Digite o número exibido na plaquinha da sua mesa',
                     textAlign: TextAlign.center,
                     style: TextStyle(
-                        fontSize: 14, color: AppColors.textSection),
+                      fontSize: 14,
+                      color: AppColors.textSection,
+                    ),
                   ),
                   const SizedBox(height: 32),
                   Container(
@@ -103,25 +115,25 @@ class _MesaScreenState extends State<MesaScreen> {
                       color: AppColors.white,
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                          color: AppColors.bluePrimary, width: 2),
+                        color: AppColors.bluePrimary,
+                        width: 2,
+                      ),
                     ),
                     child: TextField(
-                      controller:  _mesaCtrl,
+                      controller: _mesaCtrl,
                       keyboardType: TextInputType.number,
-                      maxLength:   4,
-                      textAlign:   TextAlign.center,
-                      inputFormatters: [
-                        FilteringTextInputFormatter.digitsOnly
-                      ],
+                      maxLength: 4,
+                      textAlign: TextAlign.center,
+                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                       style: const TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
                         color: AppColors.bluePrimary,
                       ),
                       decoration: const InputDecoration(
-                        hintText:    '00',
-                        hintStyle:   TextStyle(color: AppColors.textEmpty),
-                        border:      InputBorder.none,
+                        hintText: '00',
+                        hintStyle: TextStyle(color: AppColors.textEmpty),
+                        border: InputBorder.none,
                         counterText: '',
                         contentPadding: EdgeInsets.symmetric(vertical: 16),
                       ),
@@ -137,7 +149,8 @@ class _MesaScreenState extends State<MesaScreen> {
                         backgroundColor: AppColors.bluePrimary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14)),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         elevation: 0,
                       ),
                       icon: const Icon(Icons.arrow_forward),
@@ -151,18 +164,22 @@ class _MesaScreenState extends State<MesaScreen> {
                     const SizedBox(height: 16),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 10),
+                        horizontal: 16,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.white,
                         borderRadius: BorderRadius.circular(12),
-                        border:
-                            Border.all(color: AppColors.cardBorder),
+                        border: Border.all(color: AppColors.cardBorder),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          const Icon(Icons.receipt_outlined,
-                              size: 16, color: AppColors.textSection),
+                          const Icon(
+                            Icons.receipt_outlined,
+                            size: 16,
+                            color: AppColors.textSection,
+                          ),
                           const SizedBox(width: 8),
                           Text(
                             '${_cart.length} item${_cart.length > 1 ? 's' : ''} · Total: R\$ ${_total.toStringAsFixed(2)}',
@@ -190,10 +207,16 @@ class _MesaScreenState extends State<MesaScreen> {
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
       child: Stack(
         children: [
-          Positioned(top: -20, right: -30,
-              child: _circle(130, AppColors.circleDeco1)),
-          Positioned(bottom: -20, left: -30,
-              child: _circle(90, AppColors.circleDeco2)),
+          Positioned(
+            top: -20,
+            right: -30,
+            child: _circle(130, AppColors.circleDeco1),
+          ),
+          Positioned(
+            bottom: -20,
+            left: -30,
+            child: _circle(90, AppColors.circleDeco2),
+          ),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -202,23 +225,29 @@ class _MesaScreenState extends State<MesaScreen> {
                   GestureDetector(
                     onTap: () => Navigator.of(context).pop(),
                     child: Container(
-                      width: 36, height: 36,
+                      width: 36,
+                      height: 36,
                       decoration: BoxDecoration(
                         color: Colors.white24,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: const Icon(Icons.arrow_back,
-                          color: Colors.white, size: 20),
+                      child: const Icon(
+                        Icons.arrow_back,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                     ),
                   ),
                   const Expanded(
-                    child: Text('Escolher Mesa',
-                        textAlign: TextAlign.center,
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                        )),
+                    child: Text(
+                      'Escolher Mesa',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
                   const SizedBox(width: 36),
                 ],
@@ -226,9 +255,10 @@ class _MesaScreenState extends State<MesaScreen> {
               const SizedBox(height: 4),
               const Padding(
                 padding: EdgeInsets.only(left: 44),
-                child: Text('Informe onde você está sentado',
-                    style:
-                        TextStyle(color: Colors.white70, fontSize: 13)),
+                child: Text(
+                  'Informe onde você está sentado',
+                  style: TextStyle(color: Colors.white70, fontSize: 13),
+                ),
               ),
             ],
           ),
@@ -238,7 +268,8 @@ class _MesaScreenState extends State<MesaScreen> {
   }
 
   Widget _circle(double size, Color color) => Container(
-        width: size, height: size,
-        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-      );
+    width: size,
+    height: size,
+    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+  );
 }

@@ -8,12 +8,14 @@ class CustomAlert extends StatelessWidget {
   final String? cancelText;
   final VoidCallback? onConfirm;
   final VoidCallback? onCancel;
+  final BuildContext dialogContext;
 
   const CustomAlert({
     super.key,
     required this.title,
     required this.message,
-    this.confirmText = 'Confirmar',
+    required this.confirmText,
+    required this.dialogContext,
     this.cancelText,
     this.onConfirm,
     this.onCancel,
@@ -24,6 +26,7 @@ class CustomAlert extends StatelessWidget {
     required String title,
     required String message,
     String confirmText = 'OK',
+    required BuildContext dialogContext,
     String? cancelText,
     VoidCallback? onConfirm,
     VoidCallback? onCancel,
@@ -33,11 +36,13 @@ class CustomAlert extends StatelessWidget {
       barrierDismissible: false,
       barrierColor: Colors.black54,
       transitionDuration: const Duration(milliseconds: 200),
-      transitionBuilder: (ctx, anim, _, child) => FadeTransition(opacity: anim, child: child,), 
+      transitionBuilder: (ctx, anim, _, child) =>
+          FadeTransition(opacity: anim, child: child),
       pageBuilder: (ctx, _, __) => CustomAlert(
-        title: title, 
+        title: title,
         message: message,
         confirmText: confirmText,
+        dialogContext: dialogContext,
         cancelText: cancelText,
         onConfirm: onConfirm ?? () => Navigator.of(ctx).pop(),
         onCancel: onCancel,
@@ -47,7 +52,7 @@ class CustomAlert extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center (
+    return Center(
       child: Material(
         color: Colors.transparent,
         child: Container(
@@ -76,53 +81,51 @@ class CustomAlert extends StatelessWidget {
                   ),
                 ),
               ),
-
               Padding(
                 padding: const EdgeInsets.fromLTRB(24, 20, 24, 20),
-                child: Column(children: [
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: AppColors.badgeBg,
-                      shape: BoxShape.circle,
+                child: Column(
+                  children: [
+                    Container(
+                      width: 52,
+                      height: 52,
+                      decoration: const BoxDecoration(
+                        color: AppColors.badgeBg,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.info_outline,
+                        color: AppColors.bluePrimary,
+                        size: 28,
+                      ),
                     ),
-                    child: const Icon(
-                      Icons.info_outline,
-                      color: AppColors.bluePrimary,
-                      size: 28,
+                    const SizedBox(height: 16),
+                    Text(
+                      title,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
+                    const SizedBox(height: 8),
+                    Text(
+                      message,
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textSection,
+                        height: 1.5,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  Text(
-                    message,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppColors.textSection,
-                      height: 1.5,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
- Row(
+                    const SizedBox(height: 24),
+                    Row(
                       children: [
                         if (cancelText != null) ...[
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () {
-                                Navigator.of(context).pop();
+                                Navigator.of(dialogContext).pop(); // ✅
                                 onCancel?.call();
                               },
                               style: OutlinedButton.styleFrom(
@@ -144,7 +147,7 @@ class CustomAlert extends StatelessWidget {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              Navigator.of(context).pop();
+                              Navigator.of(dialogContext).pop(); // ✅
                               onConfirm?.call();
                             },
                             style: ElevatedButton.styleFrom(
@@ -158,7 +161,9 @@ class CustomAlert extends StatelessWidget {
                             ),
                             child: Text(
                               confirmText,
-                              style: const TextStyle(fontWeight: FontWeight.bold),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                              ),
                             ),
                           ),
                         ),

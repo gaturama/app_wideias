@@ -26,11 +26,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _validar() {
     if (_emailCtrl.text.trim().isEmpty) {
-      CustomAlert.show(context, title: 'Erro', message: 'Informe o email');
+      CustomAlert.show(dialogContext: context, context, title: 'Erro', message: 'Informe o email');
       return false;
     }
     if (_senhaCtrl.text.trim().isEmpty) {
-      CustomAlert.show(context, title: 'Erro', message: 'Informe a senha');
+      CustomAlert.show(dialogContext: context,context, title: 'Erro', message: 'Informe a senha');
       return false;
     }
     return true;
@@ -49,6 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     if (erro == null) {
       CustomAlert.show(
+        dialogContext: context,
         context,
         title: 'Bem vindo!',
         message: 'Login realizado com sucesso',
@@ -57,183 +58,210 @@ class _LoginScreenState extends State<LoginScreen> {
             Navigator.of(context).pushReplacementNamed('/localizacao'),
       );
     } else {
-      CustomAlert.show(context, title: 'Erro na autenticação', message: erro);
+      CustomAlert.show(
+        dialogContext: context,
+        context,
+        title: 'Erro na autenticação',
+        message: erro,
+      );
     }
   }
 
   void _mostrarEsqueciSenha() {
     final emailCtrl = TextEditingController();
-    bool loading = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => StatefulBuilder(
-        builder: (ctx, setModalState) => Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.of(ctx).viewInsets.bottom,
-          ),
-          child: Container(
-            padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+        builder: (ctx, setModalState) {
+          bool loading = false;
+
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.of(ctx).viewInsets.bottom,
             ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Handle
-                Center(
-                  child: Container(
-                    width: 40,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 20),
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 36),
+              decoration: const BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      margin: const EdgeInsets.only(bottom: 20),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardBorder,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const Text(
+                    'Esqueci minha senha',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  const Text(
+                    'Informe seu e-mail cadastrado para continuar.',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSection,
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Container(
                     decoration: BoxDecoration(
-                      color: AppColors.cardBorder,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                const Text(
-                  'Esqueci minha senha',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                const Text(
-                  'Informe seu e-mail cadastrado para continuar.',
-                  style: TextStyle(fontSize: 13, color: AppColors.textSection),
-                ),
-                const SizedBox(height: 20),
-                Container(
-                  decoration: BoxDecoration(
-                    color: AppColors.background,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppColors.cardBorder, width: 1.5),
-                  ),
-                  child: Row(
-                    children: [
-                      const Padding(
-                        padding: EdgeInsets.symmetric(horizontal: 14),
-                        child: Icon(
-                          Icons.mail_outline,
-                          color: AppColors.textSection,
-                          size: 18,
-                        ),
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.cardBorder,
+                        width: 1.5,
                       ),
-                      Expanded(
-                        child: TextField(
-                          controller: emailCtrl,
-                          keyboardType: TextInputType.emailAddress,
-                          style: const TextStyle(
-                            fontSize: 14,
-                            color: AppColors.textPrimary,
-                          ),
-                          decoration: const InputDecoration(
-                            hintText: 'user@email.com',
-                            hintStyle: TextStyle(color: AppColors.textEmpty),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 14),
+                    ),
+                    child: Row(
+                      children: [
+                        const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 14),
+                          child: Icon(
+                            Icons.mail_outline,
+                            color: AppColors.textSection,
+                            size: 18,
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 20),
-                SizedBox(
-                  height: 52,
-                  child: ElevatedButton(
-                    onPressed: loading
-                        ? null
-                        : () async {
-                            final email = emailCtrl.text.trim().toLowerCase();
-                            if (email.isEmpty) {
-                              CustomAlert.show(
-                                context,
-                                title: 'Erro',
-                                message: 'Informe o e-mail',
-                              );
-                              return;
-                            }
-                            if (!email.contains('@')) {
-                              CustomAlert.show(
-                                context,
-                                title: 'Erro',
-                                message: 'E-mail inválido',
-                              );
-                              return;
-                            }
-
-                            setModalState(() => loading = true);
-
-                            final result = await AuthService.login(
-                              email: email,
-                              senha: '___verificacao___',
-                            );
-
-                            setModalState(() => loading = false);
-
-                            final erro = result.erro ?? '';
-                            final emailExiste =
-                                result.sucesso ||
-                                erro.toLowerCase().contains('senha') ||
-                                erro.toLowerCase().contains('inválidos');
-
-                            if (!mounted) return;
-                            Navigator.of(ctx).pop();
-
-                            if (emailExiste) {
-                              Navigator.of(context).pushNamed(
-                                '/redefinir-senha',
-                                arguments: {'email': email},
-                              );
-                            } else {
-                              CustomAlert.show(
-                                context,
-                                title: 'E-mail não encontrado',
-                                message:
-                                    'Não encontramos uma conta com esse e-mail.',
-                              );
-                            }
-                          },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.bluePrimary,
-                      disabledBackgroundColor: AppColors.textEmpty,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      elevation: 0,
-                    ),
-                    child: loading
-                        ? const SizedBox(
-                            width: 22,
-                            height: 22,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2.5,
+                        Expanded(
+                          child: TextField(
+                            controller: emailCtrl,
+                            keyboardType: TextInputType.emailAddress,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: AppColors.textPrimary,
                             ),
-                          )
-                        : const Text(
-                            'CONTINUAR',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 15,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
+                            decoration: const InputDecoration(
+                              hintText: 'user@email.com',
+                              hintStyle: TextStyle(color: AppColors.textEmpty),
+                              border: InputBorder.none,
+                              contentPadding: EdgeInsets.symmetric(
+                                vertical: 14,
+                              ),
                             ),
                           ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 20),
+                  StatefulBuilder(
+                    builder: (ctx2, setButtonState) => SizedBox(
+                      height: 52,
+                      child: ElevatedButton(
+                        onPressed: loading
+                            ? null
+                            : () async {
+                                final email = emailCtrl.text
+                                    .trim()
+                                    .toLowerCase();
+
+                                // ✅ Validações usando ctx do modal
+                                if (email.isEmpty) {
+                                  CustomAlert.show(
+                                    dialogContext: context,
+                                    ctx,
+                                    title: 'Erro',
+                                    message: 'Informe o e-mail',
+                                  );
+                                  return;
+                                }
+                                if (!email.contains('@')) {
+                                  CustomAlert.show(
+                                    dialogContext: context,
+                                    ctx,
+                                    title: 'Erro',
+                                    message: 'E-mail inválido',
+                                  );
+                                  return;
+                                }
+
+                                setModalState(() => loading = true);
+                                setButtonState(() {});
+
+                                final result = await AuthService.login(
+                                  email: email,
+                                  senha: '___verificacao___',
+                                );
+
+                                setModalState(() => loading = false);
+                                setButtonState(() {});
+
+                                final erro = result.erro ?? '';
+                                final emailExiste =
+                                    result.sucesso ||
+                                    erro.toLowerCase().contains('senha') ||
+                                    erro.toLowerCase().contains('inválidos');
+
+                                if (!ctx.mounted) return;
+                                Navigator.of(ctx).pop();
+
+                                if (!mounted) return;
+                                if (emailExiste) {
+                                  Navigator.of(context).pushNamed(
+                                    '/redefinir-senha',
+                                    arguments: {'email': email},
+                                  );
+                                } else {
+                                  CustomAlert.show(
+                                    context,
+                                    dialogContext: context,
+                                    title: 'E-mail não encontrado',
+                                    message:
+                                        'Não encontramos uma conta com esse e-mail.',
+                                  );
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.bluePrimary,
+                          disabledBackgroundColor: AppColors.textEmpty,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: loading
+                            ? const SizedBox(
+                                width: 22,
+                                height: 22,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2.5,
+                                ),
+                              )
+                            : const Text(
+                                'CONTINUAR',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 1,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

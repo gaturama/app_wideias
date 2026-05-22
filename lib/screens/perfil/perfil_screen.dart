@@ -50,6 +50,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
   Future<void> _salvar() async {
     if (_nomeCtrl.text.trim().isEmpty) {
       CustomAlert.show(
+        dialogContext: context,
         context,
         title: 'Erro',
         message: 'Preencha pelo menos o nome!',
@@ -69,6 +70,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
     if (!mounted) return;
 
     CustomAlert.show(
+      dialogContext: context,
       context,
       title: 'Sucesso',
       message: 'Informações atualizadas com sucesso!',
@@ -78,6 +80,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   void _confirmarLogout() {
     CustomAlert.show(
+      dialogContext: context,
       context,
       title: 'Sair da conta',
       message: 'Tem certeza que deseja sair?',
