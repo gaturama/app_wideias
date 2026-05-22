@@ -6,7 +6,6 @@ import '../core/services/auth_service.dart';
 class AuthProvider extends ChangeNotifier {
   UserModel? _user;
   bool _loading = false;
-
   UserModel? get user => _user;
   bool get loading => _loading;
   bool get isLogged => _user != null;
@@ -15,7 +14,6 @@ class AuthProvider extends ChangeNotifier {
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('token');
     if (token == null) return;
-
     _user = UserModel(
       id: prefs.getString('user_id') ?? '',
       nome: prefs.getString('user_nome') ?? '',
@@ -29,30 +27,51 @@ class AuthProvider extends ChangeNotifier {
   Future<String?> login(String email, String senha) async {
     _loading = true;
     notifyListeners();
-
     try {
-      final result = await AuthService.login(email: email, senha: senha);
+      final prefs = await SharedPreferences.getInstance();
+      final senhaLocal = prefs.getString('local_senha_${email.toLowerCase()}');
 
-      if (result.sucesso && result.dados != null) {
-        final dados = result.dados!;
-
-        print('Usuario retornado: ${dados['Nome']}');
-        print('Token: ${dados['Token']}');
-
+      if (senhaLocal != null) {
+        if (senhaLocal != senha) {
+          _loading = false;
+          notifyListeners();
+          return 'Senha incorreta';
+        }
+        final token = prefs.getString('token') ?? '';
+        if (token.isEmpty) {
+          _loading = false;
+          notifyListeners();
+          return 'Sessão expirada. Contate o suporte.';
+        }
         _user = UserModel(
-          id: dados['IDCliente']?.toString() ?? '',
-          nome: dados['Nome']?.toString() ?? '',
-          email: dados['Email']?.toString() ?? email,
-          telefone: dados['Telefone']?.toString() ?? '',
-          token: dados['Token']?.toString() ?? '', 
+          id: prefs.getString('user_id') ?? '',
+          nome: prefs.getString('user_nome') ?? '',
+          email: prefs.getString('user_email') ?? email,
+          telefone: prefs.getString('user_phone') ?? '',
+          token: token,
         );
-
-        await _salvarSessao(_user!);
         _loading = false;
         notifyListeners();
         return null;
       }
 
+      final result = await AuthService.login(email: email, senha: senha);
+      if (result.sucesso && result.dados != null) {
+        final dados = result.dados!;
+        print('Usuario retornado: ${dados['Nome']}');
+        print('Token: ${dados['Token']}');
+        _user = UserModel(
+          id: dados['IDCliente']?.toString() ?? '',
+          nome: dados['Nome']?.toString() ?? '',
+          email: dados['Email']?.toString() ?? email,
+          telefone: dados['Telefone']?.toString() ?? '',
+          token: dados['Token']?.toString() ?? '',
+        );
+        await _salvarSessao(_user!);
+        _loading = false;
+        notifyListeners();
+        return null;
+      }
       _loading = false;
       notifyListeners();
       return result.erro ?? 'Erro ao fazer login';
@@ -62,6 +81,16 @@ class AuthProvider extends ChangeNotifier {
       notifyListeners();
       return 'Erro inesperado: $e';
     }
+  }
+
+  Future<void> redefinirSenhaLocal(String email, String novaSenha) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('local_senha_${email.toLowerCase()}', novaSenha);
+  }
+
+  Future<bool> emailTemSenhaLocal(String email) async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.containsKey('local_senha_${email.toLowerCase()}');
   }
 
   Future<String?> cadastrar({
@@ -74,35 +103,23 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     _loading = true;
     notifyListeners();
-
     final result = await AuthService.cadastrar(
-      nome: nome,
-      cpf: cpf,
-      email: email,
-      senha: senha,
-      telefone: telefone,
-      nascimento: nascimento,
+      nome: nome, cpf: cpf, email: email,
+      senha: senha, telefone: telefone, nascimento: nascimento,
     );
     _loading = false;
-
     if (result.sucesso && result.dados != null) {
       final dados = result.dados!;
       final token = dados['token']?.toString() ?? 'token_placeholder';
       final userId = dados['IDCliente']?.toString() ?? '';
-
       _user = UserModel(
-        id: userId,
-        nome: nome,
-        email: email,
-        telefone: telefone,
-        token: token,
+        id: userId, nome: nome, email: email,
+        telefone: telefone, token: token,
       );
-
       await _salvarSessao(_user!);
       notifyListeners();
       return null;
     }
-
     notifyListeners();
     return result.erro ?? 'Erro ao cadastrar';
   }
@@ -133,11 +150,8 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     if (_user == null) return;
     _user = UserModel(
-      id: _user!.id,
-      nome: nome,
-      email: _user!.email,
-      telefone: telefone,
-      token: _user!.token,
+      id: _user!.id, nome: nome,
+      email: _user!.email, telefone: telefone, token: _user!.token,
     );
     await _salvarSessao(_user!);
     notifyListeners();

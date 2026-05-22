@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:wideias_app/screens/esqueci_senha/redefinir_senha_screen.dart';
 import 'core/constants/app_colors.dart';
 import 'providers/auth_provider.dart';
 import 'providers/storage_provider.dart';
@@ -59,6 +60,7 @@ class App extends StatelessWidget {
           '/qr-code': (_) => const QrCodeScreen(),
           '/qr-scanner': (_) => const QrScannerScreen(),
           '/dividir-conta': (_) => const DividirContaScreen(),
+          '/redefinir-senha': (_) => const RedefinirSenhaScreen(),
         },
       ),
     );
