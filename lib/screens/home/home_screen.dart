@@ -353,7 +353,7 @@ class _HomeScreenState extends State<HomeScreen> {
               onTap: () => _confirmarRetirada(item),
               child: const Icon(
                 Icons.check_circle,
-                color: AppColors.bluePrimary,
+                color: AppColors.greenSuccess,
                 size: 32,
               ),
             ),
