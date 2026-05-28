@@ -30,8 +30,11 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
   }
 
   Future<void> _inicializar() async {
-    await _buscarLocalizacaoUsuario();
-    await _buscarEventos();
+    try {
+      await Future.wait([_buscarLocalizacaoUsuario(), _buscarEventos()]);
+    } catch (e) {
+      print('Erro em _inicializar: $e');
+    }
   }
 
   Future<void> _buscarLocalizacaoUsuario() async {
@@ -45,7 +48,7 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
         setState(() => _enderecoAtual = 'Localização não disponível');
         return;
       }
-      
+
       Position? pos;
       try {
         pos = await Geolocator.getCurrentPosition(
@@ -140,11 +143,13 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
       });
     } catch (e) {
       print('Erro em _buscarEventos: $e');
-      setState(() {
-        _erro = 'Não foi possível carregar os locais.';
-        _loading = false;
-        _refreshing = false;
-      });
+      if (mounted) {
+        setState(() {
+          _erro = 'Não foi possível carregar os locais.';
+          _loading = false;
+          _refreshing = false;
+        });
+      }
     }
   }
 
