@@ -33,7 +33,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
 
     CustomAlert.show(
       context,
-      dialogContext: context,
       title: 'Repetir pedido',
       message:
           'Deseja fazer novamente:\n"${item.productName}" (${item.quantity}x)\nR\$ ${item.total.toStringAsFixed(2)}?',
@@ -50,7 +49,6 @@ class _HistoricoScreenState extends State<HistoricoScreen> {
         if (!mounted) return;
         CustomAlert.show(
           context,
-          dialogContext: context,
           title: 'Pedido adicionado!',
           message: 'O pedido foi adicionado aos seus pendentes.',
           confirmText: 'Ver pedidos',

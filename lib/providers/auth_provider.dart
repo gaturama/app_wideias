@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user_model.dart';
@@ -29,7 +30,12 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     try {
       final prefs = await SharedPreferences.getInstance();
-      final senhaLocal = prefs.getString('local_senha_${email.toLowerCase()}');
+      final chave = 'local_senha_${email.toLowerCase()}';
+      final senhaLocal = prefs.getString(chave);
+
+      print('=== LOGIN LOCAL ===');
+      print('Chave buscada: $chave');
+      print('Senha local encontrada: ${senhaLocal != null}');
 
       if (senhaLocal != null) {
         if (senhaLocal != senha) {
@@ -37,19 +43,24 @@ class AuthProvider extends ChangeNotifier {
           notifyListeners();
           return 'Senha incorreta';
         }
-        final token = prefs.getString('token') ?? '';
-        if (token.isEmpty) {
+
+        final dadosJson = prefs.getString('local_dados_${email.toLowerCase()}');
+        if (dadosJson == null) {
           _loading = false;
           notifyListeners();
-          return 'Sessão expirada. Contate o suporte.';
+          return 'Sessão expirada. Faça login com a senha original primeiro.';
         }
+
+        final dados = jsonDecode(dadosJson) as Map<String, dynamic>;
         _user = UserModel(
-          id: prefs.getString('user_id') ?? '',
-          nome: prefs.getString('user_nome') ?? '',
-          email: prefs.getString('user_email') ?? email,
-          telefone: prefs.getString('user_phone') ?? '',
-          token: token,
+          id: dados['id']?.toString() ?? '',
+          nome: dados['nome']?.toString() ?? '',
+          email: dados['email']?.toString() ?? email,
+          telefone: dados['telefone']?.toString() ?? '',
+          token: dados['token']?.toString() ?? '',
         );
+
+        await _salvarSessao(_user!);
         _loading = false;
         notifyListeners();
         return null;
@@ -72,6 +83,7 @@ class AuthProvider extends ChangeNotifier {
         notifyListeners();
         return null;
       }
+
       _loading = false;
       notifyListeners();
       return result.erro ?? 'Erro ao fazer login';
@@ -85,7 +97,34 @@ class AuthProvider extends ChangeNotifier {
 
   Future<void> redefinirSenhaLocal(String email, String novaSenha) async {
     final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('local_senha_${email.toLowerCase()}', novaSenha);
+    final chaveEmail = email.toLowerCase();
+
+    await prefs.setString('local_senha_$chaveEmail', novaSenha);
+
+    final id = _user?.id ?? prefs.getString('user_id') ?? '';
+    final nome = _user?.nome ?? prefs.getString('user_nome') ?? '';
+    final telefone = _user?.telefone ?? prefs.getString('user_phone') ?? '';
+    final token = _user?.token ?? prefs.getString('token') ?? '';
+
+    if (token.isNotEmpty) {
+      await prefs.setString(
+        'local_dados_$chaveEmail',
+        jsonEncode({
+          'id': id,
+          'nome': nome,
+          'email': email,
+          'telefone': telefone,
+          'token': token,
+        }),
+      );
+      print('=== SENHA SALVA ===');
+      print('Chave salva: local_senha_$chaveEmail');
+      print('Dados salvos: true');
+    } else {
+      print('=== SENHA SALVA ===');
+      print('Chave salva: local_senha_$chaveEmail');
+      print('AVISO: token vazio — snapshot não salvo');
+    }
   }
 
   Future<bool> emailTemSenhaLocal(String email) async {
@@ -104,8 +143,12 @@ class AuthProvider extends ChangeNotifier {
     _loading = true;
     notifyListeners();
     final result = await AuthService.cadastrar(
-      nome: nome, cpf: cpf, email: email,
-      senha: senha, telefone: telefone, nascimento: nascimento,
+      nome: nome,
+      cpf: cpf,
+      email: email,
+      senha: senha,
+      telefone: telefone,
+      nascimento: nascimento,
     );
     _loading = false;
     if (result.sucesso && result.dados != null) {
@@ -113,8 +156,11 @@ class AuthProvider extends ChangeNotifier {
       final token = dados['token']?.toString() ?? 'token_placeholder';
       final userId = dados['IDCliente']?.toString() ?? '';
       _user = UserModel(
-        id: userId, nome: nome, email: email,
-        telefone: telefone, token: token,
+        id: userId,
+        nome: nome,
+        email: email,
+        telefone: telefone,
+        token: token,
       );
       await _salvarSessao(_user!);
       notifyListeners();
@@ -150,8 +196,11 @@ class AuthProvider extends ChangeNotifier {
   }) async {
     if (_user == null) return;
     _user = UserModel(
-      id: _user!.id, nome: nome,
-      email: _user!.email, telefone: telefone, token: _user!.token,
+      id: _user!.id,
+      nome: nome,
+      email: _user!.email,
+      telefone: telefone,
+      token: _user!.token,
     );
     await _salvarSessao(_user!);
     notifyListeners();

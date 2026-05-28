@@ -43,7 +43,6 @@ class _PixScreenState extends State<PixScreen> {
     });
 
     CustomAlert.show(
-      dialogContext: context,
       context,
       title: 'Copiado!',
       message: 'O código PIX foi copiado para a área de transferência.',

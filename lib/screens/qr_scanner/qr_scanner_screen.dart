@@ -37,7 +37,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       final lng = uri.queryParameters['lng'];
 
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Mesa identificada!',
         message: 'Mesa: $mesa\nLatitude: $lat\nLongitude: $lng',
@@ -48,7 +47,6 @@ class _QrScannerScreenState extends State<QrScannerScreen> {
       );
     } catch (_) {
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Erro ao ler QR Code',
         message: 'O QR Code escaneado é inválido.',

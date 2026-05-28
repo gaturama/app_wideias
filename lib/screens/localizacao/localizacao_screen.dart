@@ -150,7 +150,6 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
 
   void _handleCheckIn(LocalizacaoModel item) {
     CustomAlert.show(
-      dialogContext: context,
       context,
       title: 'Confirme sua presença',
       message: 'Você selecionou: ${item.name}.\nConfirme para continuar.',

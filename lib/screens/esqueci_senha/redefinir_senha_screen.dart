@@ -40,12 +40,11 @@ class _RedefinirSenhaScreenState extends State<RedefinirSenhaScreen> {
     final confirm = _confirmCtrl.text.trim();
 
     if (senha.isEmpty) {
-      CustomAlert.show(dialogContext: context, context, title: 'Erro', message: 'Informe a nova senha');
+      CustomAlert.show(context, title: 'Erro', message: 'Informe a nova senha');
       return;
     }
     if (senha.length < 4) {
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Erro',
         message: 'A senha deve ter pelo menos 4 caracteres',
@@ -54,7 +53,6 @@ class _RedefinirSenhaScreenState extends State<RedefinirSenhaScreen> {
     }
     if (senha != confirm) {
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Erro',
         message: 'As senah não coincidem',
@@ -68,7 +66,6 @@ class _RedefinirSenhaScreenState extends State<RedefinirSenhaScreen> {
 
     if (!mounted) return;
     CustomAlert.show(
-      dialogContext: context,
       context,
       title: 'Senha redefinida!',
       message: 'Sua nova senha foi salva. Use-a no próximo login.',

@@ -87,7 +87,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   Future<void> _finalizarPagamento(String metodo) async {
     if (_cart.isEmpty) {
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Carrinho vazio',
         message: 'Adicione produtos antes de finalizar',
@@ -101,12 +100,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     final auth = context.read<AuthProvider>();
     final pedidos = context.read<PedidosProvider>();
 
-    // Descontar crédito se usado
     if (_creditoAplicado > 0) {
       await storage.setCredito(_credito - _creditoAplicado);
     }
 
-    // Salvar pedidos pendentes
     await pedidos.adicionarPedidos(
       userId: auth.user?.id ?? '',
       cart: _cart,
@@ -120,7 +117,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     if (!mounted) return;
 
     CustomAlert.show(
-      dialogContext: context,
       context,
       title: 'Pedido confirmado!',
       message:

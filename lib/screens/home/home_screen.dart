@@ -40,7 +40,6 @@ class _HomeScreenState extends State<HomeScreen> {
   void _confirmarRetirada(OrderItemModel item) {
     CustomAlert.show(
       context,
-      dialogContext: context,
       title: 'Confirmar retirada',
       message: 'Você está retirando "${item.product?.name ?? 'Produto'}"?',
       confirmText: 'Sim',
@@ -52,7 +51,6 @@ class _HomeScreenState extends State<HomeScreen> {
         if (!mounted) return;
         CustomAlert.show(
           context,
-          dialogContext: context,
           title: 'Item retirado',
           message: 'Esse item foi movido para histórico!',
           confirmText: 'OK',

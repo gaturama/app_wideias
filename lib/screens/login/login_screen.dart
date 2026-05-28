@@ -26,11 +26,11 @@ class _LoginScreenState extends State<LoginScreen> {
 
   bool _validar() {
     if (_emailCtrl.text.trim().isEmpty) {
-      CustomAlert.show(dialogContext: context, context, title: 'Erro', message: 'Informe o email');
+      CustomAlert.show(context, title: 'Erro', message: 'Informe o email');
       return false;
     }
     if (_senhaCtrl.text.trim().isEmpty) {
-      CustomAlert.show(dialogContext: context,context, title: 'Erro', message: 'Informe a senha');
+      CustomAlert.show(context, title: 'Erro', message: 'Informe a senha');
       return false;
     }
     return true;
@@ -48,22 +48,9 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (erro == null) {
-      CustomAlert.show(
-        dialogContext: context,
-        context,
-        title: 'Bem vindo!',
-        message: 'Login realizado com sucesso',
-        confirmText: 'OK',
-        onConfirm: () =>
-            Navigator.of(context).pushReplacementNamed('/localizacao'),
-      );
+      Navigator.of(context).pushReplacementNamed('/localizacao');
     } else {
-      CustomAlert.show(
-        dialogContext: context,
-        context,
-        title: 'Erro na autenticação',
-        message: erro,
-      );
+      CustomAlert.show(context, title: 'Erro na autenticação', message: erro);
     }
   }
 
@@ -172,10 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
                                     .trim()
                                     .toLowerCase();
 
-                                // ✅ Validações usando ctx do modal
                                 if (email.isEmpty) {
                                   CustomAlert.show(
-                                    dialogContext: context,
                                     ctx,
                                     title: 'Erro',
                                     message: 'Informe o e-mail',
@@ -184,7 +169,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 }
                                 if (!email.contains('@')) {
                                   CustomAlert.show(
-                                    dialogContext: context,
                                     ctx,
                                     title: 'Erro',
                                     message: 'E-mail inválido',
@@ -221,7 +205,6 @@ class _LoginScreenState extends State<LoginScreen> {
                                 } else {
                                   CustomAlert.show(
                                     context,
-                                    dialogContext: context,
                                     title: 'E-mail não encontrado',
                                     message:
                                         'Não encontramos uma conta com esse e-mail.',
@@ -361,7 +344,6 @@ class _LoginScreenState extends State<LoginScreen> {
             enabled: !loading,
           ),
           const SizedBox(height: 16),
-
           _buildLabel('SENHA'),
           _buildInput(
             controller: _senhaCtrl,
@@ -378,7 +360,6 @@ class _LoginScreenState extends State<LoginScreen> {
               onPressed: () => setState(() => _showSenha = !_showSenha),
             ),
           ),
-
           Align(
             alignment: Alignment.centerRight,
             child: TextButton(
@@ -389,7 +370,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
             ),
           ),
-
           SizedBox(
             height: 52,
             child: ElevatedButton(
@@ -422,7 +402,6 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
             ),
           ),
-
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Row(
@@ -439,7 +418,6 @@ class _LoginScreenState extends State<LoginScreen> {
               ],
             ),
           ),
-
           SizedBox(
             height: 52,
             child: OutlinedButton(

@@ -1,32 +1,12 @@
 import 'package:flutter/material.dart';
 import '../core/constants/app_colors.dart';
 
-class CustomAlert extends StatelessWidget {
-  final String title;
-  final String message;
-  final String confirmText;
-  final String? cancelText;
-  final VoidCallback? onConfirm;
-  final VoidCallback? onCancel;
-  final BuildContext dialogContext;
-
-  const CustomAlert({
-    super.key,
-    required this.title,
-    required this.message,
-    required this.confirmText,
-    required this.dialogContext,
-    this.cancelText,
-    this.onConfirm,
-    this.onCancel,
-  });
-
+class CustomAlert {
   static Future<void> show(
     BuildContext context, {
     required String title,
     required String message,
     String confirmText = 'OK',
-    required BuildContext dialogContext,
     String? cancelText,
     VoidCallback? onConfirm,
     VoidCallback? onCancel,
@@ -38,17 +18,37 @@ class CustomAlert extends StatelessWidget {
       transitionDuration: const Duration(milliseconds: 200),
       transitionBuilder: (ctx, anim, _, child) =>
           FadeTransition(opacity: anim, child: child),
-      pageBuilder: (ctx, _, __) => CustomAlert(
+      pageBuilder: (ctx, _, __) => _CustomAlertWidget(
         title: title,
         message: message,
         confirmText: confirmText,
-        dialogContext: dialogContext,
         cancelText: cancelText,
-        onConfirm: onConfirm ?? () => Navigator.of(ctx).pop(),
+        dialogContext: ctx, 
+        onConfirm: onConfirm,
         onCancel: onCancel,
       ),
     );
   }
+}
+
+class _CustomAlertWidget extends StatelessWidget {
+  final String title;
+  final String message;
+  final String confirmText;
+  final String? cancelText;
+  final VoidCallback? onConfirm;
+  final VoidCallback? onCancel;
+  final BuildContext dialogContext;
+
+  const _CustomAlertWidget({
+    required this.title,
+    required this.message,
+    required this.confirmText,
+    required this.dialogContext,
+    this.cancelText,
+    this.onConfirm,
+    this.onCancel,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -125,7 +125,7 @@ class CustomAlert extends StatelessWidget {
                           Expanded(
                             child: OutlinedButton(
                               onPressed: () {
-                                Navigator.of(dialogContext).pop(); // ✅
+                                Navigator.of(dialogContext).pop();
                                 onCancel?.call();
                               },
                               style: OutlinedButton.styleFrom(
@@ -147,7 +147,7 @@ class CustomAlert extends StatelessWidget {
                         Expanded(
                           child: ElevatedButton(
                             onPressed: () {
-                              Navigator.of(dialogContext).pop(); // ✅
+                              Navigator.of(dialogContext).pop();
                               onConfirm?.call();
                             },
                             style: ElevatedButton.styleFrom(
@@ -162,8 +162,7 @@ class CustomAlert extends StatelessWidget {
                             child: Text(
                               confirmText,
                               style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                              ),
+                                  fontWeight: FontWeight.bold),
                             ),
                           ),
                         ),

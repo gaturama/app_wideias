@@ -52,7 +52,6 @@ class _CreditoScreenState extends State<CreditoScreen> {
     final v = _valorAtivo;
     if (v == null || v <= 0) {
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Erro',
         message: 'Selecione ou digite um valor antes de pagar.',
@@ -61,7 +60,6 @@ class _CreditoScreenState extends State<CreditoScreen> {
     }
 
     CustomAlert.show(
-      dialogContext: context,
       context,
       title: 'Confirmar pagamento',
       message: 'Adicionar R\$ ${v.toStringAsFixed(2)} via $metodo?',
@@ -86,7 +84,6 @@ class _CreditoScreenState extends State<CreditoScreen> {
 
     if (!mounted) return;
     CustomAlert.show(
-      dialogContext: context,
       context,
       title: 'Crédito adicionado!',
       message:

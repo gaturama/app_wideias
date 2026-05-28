@@ -46,7 +46,6 @@ class _MesaScreenState extends State<MesaScreen> {
     if (_mesaCtrl.text.trim().isEmpty) {
       CustomAlert.show(
         context,
-        dialogContext: context,
         title: 'Atenção',
         message: 'Por favor, informe o número da mesa!',
       );

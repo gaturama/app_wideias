@@ -108,7 +108,6 @@ class _CadastroScreenState extends State<CadastroScreen> {
 
     if (erro == null) {
       CustomAlert.show(
-        dialogContext: context,
         context,
         title: 'Cadastro realizado!',
         message: 'Bem vindo, ${_nomeCtrl.text.trim()}!',
@@ -121,7 +120,7 @@ class _CadastroScreenState extends State<CadastroScreen> {
   }
 
   void _alerta(String title, String message) =>
-      CustomAlert.show(dialogContext: context, context, title: title, message: message);
+      CustomAlert.show(context, title: title, message: message);
 
   @override
   Widget build(BuildContext context) {
