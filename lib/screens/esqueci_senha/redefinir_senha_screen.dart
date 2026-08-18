@@ -55,7 +55,7 @@ class _RedefinirSenhaScreenState extends State<RedefinirSenhaScreen> {
       CustomAlert.show(
         context,
         title: 'Erro',
-        message: 'As senah não coincidem',
+        message: 'As senhas não coincidem',
       );
       return;
     }

@@ -7,6 +7,7 @@ import '../../providers/pedidos_provider.dart';
 import '../../providers/storage_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_alert.dart';
+import '../../core/services/google_pay_service.dart';
 
 class PagamentoScreen extends StatefulWidget {
   const PagamentoScreen({super.key});
@@ -22,6 +23,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   String? _mesa;
   bool _usarCredito = false;
   bool _loading = false;
+
+  final GooglePayService _googlePayService = GooglePayService();
 
   static const _metodos = [
     {'key': 'PIX', 'label': 'PIX', 'icon': Icons.pix},
@@ -54,20 +57,68 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   double get _totalFinal => _totalCarrinho - _creditoAplicado;
 
   Future<void> _handleMetodo(String key) async {
-    if (key == 'Samsung Pay') {
-      await _abrirApp(
-        'samsungpay://',
-        'https://play.google.com/store/apps/details?id=com.samsung.android.spay',
-      );
-      await Future.delayed(const Duration(seconds: 1));
-    } else if (key == 'Google Pay') {
-      await _abrirApp(
-        'intent:#Intent;package=com.google.android.apps.walletnfcrel;end',
-        'https://play.google.com/store/apps/details?id=com.google.android.apps.walletnfcrel',
-      );
-      await Future.delayed(const Duration(seconds: 1));
+    if (key == 'PIX') {
+      final pago = await Navigator.of(
+        context,
+      ).pushNamed('/pix', arguments: {'valorTotal': _totalFinal});
+
+      if (pago == true) {
+        _finalizarPagamento('PIX');
+      }
+      return;
     }
-    _finalizarPagamento(key);
+
+    if (key == 'Google Pay') {
+      try {
+        final disponivel = await _googlePayService.isReadyToPay();
+
+        if (!mounted) return;
+
+        if (!disponivel) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Google Pay não está disponível neste dispositivo.',
+              ),
+            ),
+          );
+
+          return;
+        }
+
+        final resultado = await _googlePayService.pay(amount: _totalFinal);
+
+        if (!mounted) return;
+
+        if (resultado['status'] == 'PAID') {
+          _finalizarPagamento('Google Pay');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Não foi possível confirmar o pagamento.'),
+            ),
+          );
+        }
+      } catch (e) {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Erro no Google Pay: $e')));
+      }
+
+      return;
+    }
+
+    if (key == 'Samsung Pay') {
+      if (!mounted) return;
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Samsung Pay ainda não está integrado.')),
+      );
+
+      return;
+    }
   }
 
   Future<void> _abrirApp(String scheme, String fallback) async {

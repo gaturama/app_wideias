@@ -33,6 +33,10 @@ android {
     }
 }
 
+dependencies {
+    implementation("com.google.android.gms:play-services-wallet:20.0.0")
+}
+
 flutter {
     source = "../.."
 }

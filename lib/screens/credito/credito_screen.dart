@@ -355,7 +355,7 @@ class _CreditoScreenState extends State<CreditoScreen> {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Icon(icon, color: AppColors.bluePrimary, size: 28),
+                Icon(icon, color: AppColors.bluePrimary, size: 32),
                 const SizedBox(width: 14),
                 Expanded(
                   child: Text(
