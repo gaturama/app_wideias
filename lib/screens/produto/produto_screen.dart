@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
+import '../../core/services/product_service.dart';
 import '../../models/cart_item_model.dart';
 import '../../models/produto_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../providers/storage_provider.dart';
-import '../../widgets/custom_alert.dart';
 import '../../widgets/bottom.nav_bar.dart';
+import '../../widgets/custom_alert.dart';
 
 class ProdutoScreen extends StatefulWidget {
   const ProdutoScreen({super.key});
@@ -19,45 +21,14 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
   List<CartItemModel> _cart = [];
   bool _loading = true;
 
-  final List<Map<String, dynamic>> _mockProdutos = [
-    {
-      'id': 'p1',
-      'name': 'Pizza Marguerita',
-      'price': 49.90,
-      'description': 'Molho de tomate, mussarela, manjericão e azeite.',
-    },
-    {
-      'id': 'p2',
-      'name': 'Hambúrguer Clássico',
-      'price': 32.90,
-      'description':
-          'Carne de 180g artesanal, queijo cheddar, alface, tomate e maionese especial.',
-    },
-    {
-      'id': 'p3',
-      'name': 'Batata Frita',
-      'price': 18.90,
-      'description': 'Crocante e temperada.',
-    },
-    {
-      'id': 'p4',
-      'name': 'Coca-Cola 600ml',
-      'price': 9.90,
-      'description': 'Gelada.',
-    },
-    {
-      'id': 'p5',
-      'name': 'Sorvete de Chocolate',
-      'price': 14.90,
-      'description': 'Delicioso sorvete de chocolate.',
-    },
-    {
-      'id': 'p6',
-      'name': 'Água Mineral',
-      'price': 5.00,
-      'description': 'Sem gás, 500ml.',
-    },
-  ];
+  final ProductService _productService = ProductService();
+
+  List<Map<String, dynamic>> _produtosApi = [];
+
+  List<String> _grupos = [];
+
+  String? _grupoSelecionado;
+  String? _subgrupoSelecionado;
 
   @override
   void initState() {
@@ -73,11 +44,128 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
     });
   }
 
-  void _carregarProdutos() {
-    setState(() {
-      _produtos = _mockProdutos.map((e) => ProdutoModel.fromJson(e)).toList();
-      _loading = false;
-    });
+  Future<void> _carregarProdutos() async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+
+      final user = authProvider.user;
+
+      if (user == null) {
+        throw Exception('Usuário não autenticado.');
+      }
+
+      if (user.token.isEmpty) {
+        throw Exception('Token da sessão não encontrado.');
+      }
+
+      if (user.uid.isEmpty) {
+        throw Exception('UID do cliente não encontrado.');
+      }
+
+      debugPrint('=== SESSÃO CARDÁPIO ===');
+
+      debugPrint(
+        'IDCliente disponível: '
+        '${user.id.isNotEmpty}',
+      );
+
+      debugPrint(
+        'UID disponível: '
+        '${user.uid.isNotEmpty}',
+      );
+
+      debugPrint(
+        'Token disponível: '
+        '${user.token.isNotEmpty}',
+      );
+
+      final response = await _productService.getCardapio(
+        appClienteToken: user.token,
+        appClientUid: user.uid,
+        cardapioId: '11588',
+      );
+
+      final cardapio = response['cardapio'] as Map<String, dynamic>?;
+
+      if (cardapio == null) {
+        throw Exception('Cardápio não encontrado.');
+      }
+
+      final produtos = (cardapio['produtos'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      final grupos = (cardapio['grupos'] as List<dynamic>? ?? [])
+          .cast<Map<String, dynamic>>();
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _produtosApi = produtos;
+
+        _grupos = grupos
+            .map((grupo) => grupo['Descricao']?.toString() ?? '')
+            .where((descricao) => descricao.isNotEmpty)
+            .toList();
+
+        _aplicarFiltros();
+
+        _loading = false;
+      });
+    } catch (e) {
+      debugPrint('Erro ao carregar cardápio: $e');
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _loading = false;
+        _produtos = [];
+      });
+    }
+  }
+
+  void _aplicarFiltros() {
+    Iterable<Map<String, dynamic>> filtrados = _produtosApi;
+
+    if (_grupoSelecionado != null) {
+      filtrados = filtrados.where(
+        (produto) => produto['Grupo']?.toString() == _grupoSelecionado,
+      );
+    }
+
+    if (_subgrupoSelecionado != null) {
+      filtrados = filtrados.where(
+        (produto) => produto['SubGrupo']?.toString() == _subgrupoSelecionado,
+      );
+    }
+
+    _produtos = filtrados.map((produto) {
+      return ProdutoModel.fromJson({
+        'id': produto['ID'].toString(),
+        'name': produto['Descricao']?.toString() ?? '',
+        'price': (produto['Valor'] as num?)?.toDouble() ?? 0.0,
+        'description': produto['SubGrupo']?.toString() ?? '',
+      });
+    }).toList();
+  }
+
+  List<String> get _subgruposDisponiveis {
+    Iterable<Map<String, dynamic>> produtos = _produtosApi;
+
+    if (_grupoSelecionado != null) {
+      produtos = produtos.where(
+        (produto) => produto['Grupo']?.toString() == _grupoSelecionado,
+      );
+    }
+
+    return produtos
+        .map((produto) => produto['SubGrupo']?.toString() ?? '')
+        .where((subgrupo) => subgrupo.isNotEmpty)
+        .toSet()
+        .toList();
   }
 
   void _adicionarAoCarrinho(ProdutoModel produto) {
@@ -107,14 +195,18 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
   int get _totalItens => _cart.fold(0, (sum, item) => sum + item.qty);
 
   @override
-  @override
   Widget build(BuildContext context) {
     return Scaffold(
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 1),
       backgroundColor: AppColors.background,
+
       body: Column(
         children: [
           _buildHeader(),
+
+          // Grupos e subgrupos
+          if (!_loading) _buildCategorias(),
+
           Expanded(
             child: _loading
                 ? const Center(
@@ -150,11 +242,14 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
                           mainAxisSpacing: 10,
                         ),
                     itemCount: _produtos.length,
-                    itemBuilder: (_, i) => _buildProdutoCard(_produtos[i]),
+                    itemBuilder: (_, i) {
+                      return _buildProdutoCard(_produtos[i]);
+                    },
                   ),
           ),
         ],
       ),
+
       bottomSheet: _cart.isNotEmpty ? _buildCartFooter() : null,
     );
   }
@@ -409,4 +504,144 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
     height: size,
     decoration: BoxDecoration(color: color, shape: BoxShape.circle),
   );
+
+  Widget _buildCategorias() {
+    final subgrupos = _subgruposDisponiveis;
+
+    return Container(
+      color: AppColors.white,
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            height: 40,
+            child: ListView(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 12),
+              children: [
+                _buildCategoryChip(
+                  texto: 'Todos',
+                  selecionado: _grupoSelecionado == null,
+                  onTap: () {
+                    setState(() {
+                      _grupoSelecionado = null;
+                      _subgrupoSelecionado = null;
+
+                      _aplicarFiltros();
+                    });
+                  },
+                ),
+
+                ..._grupos.map(
+                  (grupo) => _buildCategoryChip(
+                    texto: grupo,
+                    selecionado: _grupoSelecionado == grupo,
+                    onTap: () {
+                      setState(() {
+                        _grupoSelecionado = grupo;
+
+                        // Sempre limpa o subgrupo
+                        // quando troca o grupo.
+                        _subgrupoSelecionado = null;
+
+                        _aplicarFiltros();
+                      });
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          if (subgrupos.isNotEmpty) ...[
+            const SizedBox(height: 10),
+
+            SizedBox(
+              height: 36,
+              child: ListView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                children: [
+                  _buildSubCategoryChip(
+                    texto: 'Todos',
+                    selecionado: _subgrupoSelecionado == null,
+                    onTap: () {
+                      setState(() {
+                        _subgrupoSelecionado = null;
+
+                        _aplicarFiltros();
+                      });
+                    },
+                  ),
+
+                  ...subgrupos.map(
+                    (subgrupo) => _buildSubCategoryChip(
+                      texto: subgrupo,
+                      selecionado: _subgrupoSelecionado == subgrupo,
+                      onTap: () {
+                        setState(() {
+                          _subgrupoSelecionado = subgrupo;
+
+                          _aplicarFiltros();
+                        });
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryChip({
+    required String texto,
+    required bool selecionado,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(texto),
+        selected: selecionado,
+        onSelected: (_) => onTap(),
+        selectedColor: AppColors.bluePrimary,
+        backgroundColor: AppColors.background,
+        labelStyle: TextStyle(
+          color: selecionado ? Colors.white : AppColors.textPrimary,
+          fontWeight: FontWeight.bold,
+        ),
+        side: BorderSide(
+          color: selecionado ? AppColors.bluePrimary : AppColors.cardBorder,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSubCategoryChip({
+    required String texto,
+    required bool selecionado,
+    required VoidCallback onTap,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(right: 8),
+      child: ChoiceChip(
+        label: Text(texto),
+        selected: selecionado,
+        onSelected: (_) => onTap(),
+        selectedColor: AppColors.bluePrimary.withOpacity(0.15),
+        backgroundColor: AppColors.white,
+        labelStyle: TextStyle(
+          color: selecionado ? AppColors.bluePrimary : AppColors.textSection,
+          fontWeight: selecionado ? FontWeight.bold : FontWeight.normal,
+        ),
+        side: BorderSide(
+          color: selecionado ? AppColors.bluePrimary : AppColors.cardBorder,
+        ),
+      ),
+    );
+  }
 }

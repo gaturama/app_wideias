@@ -1,7 +1,6 @@
 ﻿import 'dart:convert';
-
+import 'dart:math';
 import 'package:http/http.dart' as http;
-
 import '../../models/pix_charge_model.dart';
 
 class PaymentService {
@@ -11,9 +10,21 @@ class PaymentService {
 
   static const String _baseUrl = 'https://sandbox.api.pagseguro.com';
 
+  String generateSaleCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    final random = Random.secure();
+
+    final randomPart = List.generate(
+      10,
+      (_) => chars[random.nextInt(chars.length)],
+    ).join();
+
+    return 'APPCLIENTE-$randomPart';
+  }
+
   Future<PixChargeModel> createPixCharge({
     required double amount,
-    required String referenceId,
+    required String saleCode,
   }) async {
     if (_sandboxToken.isEmpty) {
       throw Exception(
@@ -44,7 +55,7 @@ class PaymentService {
     };
 
     final body = {
-      'reference_id': referenceId,
+      'reference_id': saleCode,
       'customer': {
         'name': 'Gabriel Teste',
         'email': 'teste@wideias.com.br',
@@ -52,7 +63,7 @@ class PaymentService {
       },
       'items': [
         {
-          'reference_id': 'WIDEIAS-ITEM-001',
+          'reference_id': saleCode,
           'name': 'Produto Teste Wideias',
           'quantity': 1,
           'unit_amount': amountInCents,
@@ -71,6 +82,9 @@ class PaymentService {
       headers: headers,
       body: jsonEncode(body),
     );
+
+    print('=== CÓDIGO DA VENDA ===');
+    print(saleCode);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(

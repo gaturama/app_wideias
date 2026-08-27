@@ -11,23 +11,26 @@ class PixScreen extends StatefulWidget {
 
   @override
   State<PixScreen> createState() => _PixScreenState();
-}
+  }
 
 class _PixScreenState extends State<PixScreen> {
   double _valorTotal = 0;
   String _pixCode = '';
+  String? _saleCode;
 
   bool _copiado = false;
   bool _pago = false;
   bool _carregando = true;
+  bool _erroRede = false;
 
   int _pollAttempts = 0;
+  int _falhasConsecutivas = 0;
 
   static const int _maxPollAttempts = 36;
 
   String? _erro;
 
-  final _paymentService = PaymentService();
+  final PaymentService _paymentService = PaymentService();
 
   Timer? _pollTimer;
 
@@ -83,14 +86,18 @@ class _PixScreenState extends State<PixScreen> {
       _pixCode = '';
       _pago = false;
       _copiado = false;
+
+      _erroRede = false;
+      _falhasConsecutivas = 0;
+      _pollAttempts = 0;
     });
 
     try {
-      final referenceId = 'WIDEIAS-${DateTime.now().millisecondsSinceEpoch}';
+      _saleCode ??= _paymentService.generateSaleCode();
 
       final charge = await _paymentService.createPixCharge(
         amount: _valorTotal,
-        referenceId: referenceId,
+        saleCode: _saleCode!,
       );
 
       if (!mounted) return;
@@ -113,6 +120,8 @@ class _PixScreenState extends State<PixScreen> {
 
   void _iniciarPolling(String orderId, DateTime expiresAt) {
     _pollAttempts = 0;
+    _falhasConsecutivas = 0;
+    _erroRede = false;
 
     _pollTimer?.cancel();
 
@@ -128,6 +137,8 @@ class _PixScreenState extends State<PixScreen> {
         if (!mounted) return;
 
         setState(() {
+          _erroRede = false;
+
           _erro =
               'Este PIX expirou. '
               'Gere um novo PIX para continuar o pagamento.';
@@ -144,6 +155,8 @@ class _PixScreenState extends State<PixScreen> {
         if (!mounted) return;
 
         setState(() {
+          _erroRede = false;
+
           _erro =
               'Pagamento ainda não confirmado. '
               'Você pode tentar novamente ou gerar um novo PIX.';
@@ -157,11 +170,19 @@ class _PixScreenState extends State<PixScreen> {
 
         if (!mounted) return;
 
+        if (_erroRede || _falhasConsecutivas > 0) {
+          setState(() {
+            _erroRede = false;
+            _falhasConsecutivas = 0;
+          });
+        }
+
         if (status == 'PAID') {
           timer.cancel();
 
           setState(() {
             _pago = true;
+            _erroRede = false;
           });
 
           await Future.delayed(const Duration(milliseconds: 900));
@@ -177,6 +198,8 @@ class _PixScreenState extends State<PixScreen> {
           timer.cancel();
 
           setState(() {
+            _erroRede = false;
+
             _erro =
                 'Este PIX expirou. '
                 'Gere um novo PIX para continuar o pagamento.';
@@ -189,12 +212,24 @@ class _PixScreenState extends State<PixScreen> {
           timer.cancel();
 
           setState(() {
+            _erroRede = false;
             _erro = 'Pagamento não aprovado.';
           });
 
           return;
         }
-      } catch (_) {}
+
+      } catch (_) {
+        _falhasConsecutivas++;
+
+        if (!mounted) return;
+
+        if (_falhasConsecutivas >= 2 && !_erroRede) {
+          setState(() {
+            _erroRede = true;
+          });
+        }
+      }
     });
   }
 
@@ -333,7 +368,7 @@ class _PixScreenState extends State<PixScreen> {
           else if (_erro != null)
             SizedBox(
               width: double.infinity,
-              height: 200,
+              height: 220,
               child: Center(
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
@@ -352,9 +387,7 @@ class _PixScreenState extends State<PixScreen> {
                         color: AppColors.textSection,
                       ),
                     ),
-
                     const SizedBox(height: 16),
-
                     TextButton.icon(
                       onPressed: _criarPix,
                       icon: const Icon(Icons.refresh),
@@ -469,6 +502,30 @@ class _PixScreenState extends State<PixScreen> {
           Text(
             'Gerando PIX...',
             style: TextStyle(fontSize: 13, color: AppColors.textEmpty),
+          ),
+        ],
+      );
+    }
+
+    if (_erroRede) {
+      return const Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          SizedBox(
+            width: 14,
+            height: 14,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: AppColors.bluePrimary,
+            ),
+          ),
+          SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              'Sem conexão. Tentando reconectar...',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: AppColors.textEmpty),
+            ),
           ),
         ],
       );

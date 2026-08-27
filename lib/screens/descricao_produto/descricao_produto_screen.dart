@@ -108,7 +108,6 @@ class _DescricaoProdutoScreenState extends State<DescricaoProdutoScreen> {
       _Adicional(id: 'a3', nome: 'Cheddar extra', preco: 4.00),
     ]);
 
-    // Restaurar edição
     if (_editar && _itemEditando != null) {
       for (final rem in _itemEditando!.ingredientesRemovidos) {
         for (final ing in _ingredientes) {
