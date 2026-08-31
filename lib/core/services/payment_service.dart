@@ -254,4 +254,58 @@ class PaymentService {
       'responseMessage': charge['payment_response']?['message']?.toString(),
     };
   }
+
+  Future<Map<String, dynamic>?> getPixPaymentData(String orderId) async {
+    if (_sandboxToken.isEmpty) {
+      throw Exception('Token Sandbox não configurado.');
+    }
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/orders/$orderId'),
+      headers: {
+        'Authorization': 'Bearer $_sandboxToken',
+        'Accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Erro ao consultar pagamento '
+        '(${response.statusCode}): ${response.body}',
+      );
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final charges = data['charges'] as List<dynamic>?;
+
+    if (charges == null || charges.isEmpty) {
+      return null;
+    }
+
+    final charge = charges.first as Map<String, dynamic>;
+    final status = charge['status']?.toString().toUpperCase();
+
+    if (status != 'PAID') {
+      return null;
+    }
+
+    final amount = charge['amount'] as Map<String, dynamic>?;
+    final paymentResponse = charge['payment_response'] as Map<String, dynamic>?;
+    final paymentMethod = charge['payment_method'] as Map<String, dynamic>?;
+    final pix = paymentMethod?['pix'] as Map<String, dynamic>?;
+
+    return {
+      'orderId': data['id']?.toString(),
+      'chargeId': charge['id']?.toString(),
+      'referenceId': charge['reference_id']?.toString(),
+      'status': status,
+      'paidAt': charge['paid_at']?.toString(),
+      'amount': amount?['value'],
+      'paymentMethod': paymentMethod?['type']?.toString(),
+      'paymentResponseCode': paymentResponse?['code']?.toString(),
+      'paymentResponseMessage': paymentResponse?['message']?.toString(),
+      'notificationId': pix?['notification_id']?.toString(),
+      'endToEndId': pix?['end_to_end_id']?.toString(),
+    };
+  }
 }

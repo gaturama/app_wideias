@@ -11,7 +11,7 @@ class PixScreen extends StatefulWidget {
 
   @override
   State<PixScreen> createState() => _PixScreenState();
-  }
+}
 
 class _PixScreenState extends State<PixScreen> {
   double _valorTotal = 0;
@@ -180,6 +180,24 @@ class _PixScreenState extends State<PixScreen> {
         if (status == 'PAID') {
           timer.cancel();
 
+          final pagamento = await _paymentService.getPixPaymentData(orderId);
+
+          debugPrint('=== PAGAMENTO CONFIRMADO ===');
+          debugPrint('Pagamento: $pagamento');
+
+          if (pagamento == null) {
+            if (!mounted) return;
+
+            setState(() {
+              _erro =
+                  'Pagamento confirmado, mas não foi possível obter os dados.';
+            });
+
+            return;
+          }
+
+          if (!mounted) return;
+
           setState(() {
             _pago = true;
             _erroRede = false;
@@ -218,7 +236,6 @@ class _PixScreenState extends State<PixScreen> {
 
           return;
         }
-
       } catch (_) {
         _falhasConsecutivas++;
 

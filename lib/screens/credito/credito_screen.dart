@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
-import '../../providers/storage_provider.dart';
+import '../../core/services/credit_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../widgets/custom_alert.dart';
 import '../../widgets/bottom.nav_bar.dart';
 
@@ -14,12 +15,17 @@ class CreditoScreen extends StatefulWidget {
 }
 
 class _CreditoScreenState extends State<CreditoScreen> {
-  final _valorCtrl = TextEditingController();
+  final TextEditingController _valorCtrl = TextEditingController();
+  final CreditService _creditService = CreditService();
   double? _valorSelecionado;
+  double _saldoAtual = 0;
   bool _loading = false;
+  bool _loadingSaldo = true;
+  String? _erroSaldo;
 
-  static const _valoresRapidos = [20.0, 50.0, 100.0];
-  static const _metodos = [
+  static const List<double> _valoresRapidos = [20.0, 50.0, 100.0];
+
+  static const List<Map<String, dynamic>> _metodos = [
     {'key': 'PIX', 'label': 'PIX', 'icon': Icons.pix},
     {
       'key': 'Google Pay',
@@ -30,123 +36,236 @@ class _CreditoScreenState extends State<CreditoScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _carregarSaldo();
+    });
+  }
+
+  @override
   void dispose() {
     _valorCtrl.dispose();
+
     super.dispose();
   }
 
   double? get _valorAtivo {
-    if (_valorSelecionado != null) return _valorSelecionado;
-    final v = double.tryParse(_valorCtrl.text.replaceAll(',', '.'));
-    return (v != null && v > 0) ? v : null;
+    if (_valorSelecionado != null) {
+      return _valorSelecionado;
+    }
+    final valor = double.tryParse(_valorCtrl.text.replaceAll(',', '.'));
+    if (valor == null || valor <= 0) {
+      return null;
+    }
+
+    return valor;
   }
 
-  void _selecionarRapido(double v) {
+  Future<void> _carregarSaldo() async {
+    if (!mounted) return;
+
     setState(() {
-      _valorSelecionado = v;
+      _loadingSaldo = true;
+      _erroSaldo = null;
+    });
+
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final user = authProvider.user;
+
+      if (user == null) {
+        throw Exception('Usuário não autenticado.');
+      }
+
+      if (user.token.isEmpty) {
+        throw Exception('Token da sessão não encontrado.');
+      }
+
+      if (user.uid.isEmpty) {
+        throw Exception('UID do cliente não encontrado.');
+      }
+
+      debugPrint('=== CONSULTAR SALDO ===');
+      debugPrint('UID disponível: ${user.uid.isNotEmpty}');
+      debugPrint('Token disponível: ${user.token.isNotEmpty}');
+
+      final response = await _creditService.getCreditos(
+        appClienteToken: user.token,
+        appClienteUid: user.uid,
+      );
+
+      debugPrint('RESPOSTA CRÉDITOS: $response');
+
+      final saldo = _extrairSaldo(response);
+
+      if (!mounted) return;
+
+      setState(() {
+        _saldoAtual = saldo;
+        _loadingSaldo = false;
+      });
+    } catch (e) {
+      debugPrint('Erro ao carregar saldo: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _loadingSaldo = false;
+        _erroSaldo = 'Não foi possível consultar seu saldo.';
+      });
+    }
+  }
+
+  double _extrairSaldo(Map<String, dynamic> response) {
+    final credito = response['creditos'];
+
+    if (credito is num) {
+      return credito.toDouble();
+    }
+
+    if (credito is String) {
+      return double.tryParse(credito) ?? 0.0;
+    }
+
+    return 0.0;
+  }
+
+  void _selecionarRapido(double valor) {
+    setState(() {
+      _valorSelecionado = valor;
+
       _valorCtrl.clear();
     });
   }
 
   void _handleMetodo(String metodo) {
-    final v = _valorAtivo;
-    if (v == null || v <= 0) {
+    final valor = _valorAtivo;
+
+    if (valor == null || valor <= 0) {
       CustomAlert.show(
         context,
         title: 'Erro',
         message: 'Selecione ou digite um valor antes de pagar.',
       );
+
       return;
     }
 
     CustomAlert.show(
       context,
       title: 'Confirmar pagamento',
-      message: 'Adicionar R\$ ${v.toStringAsFixed(2)} via $metodo?',
+      message: 'Adicionar R\$ ${valor.toStringAsFixed(2)} via $metodo?',
       confirmText: 'Confirmar',
       cancelText: 'Cancelar',
-      onConfirm: () => _adicionarCredito(v, metodo),
+      onConfirm: () {
+        _iniciarAdicaoCredito(valor, metodo);
+      },
       onCancel: () {},
     );
   }
 
-  Future<void> _adicionarCredito(double valor, String metodo) async {
-    setState(() => _loading = true);
-    final storage = context.read<StorageProvider>();
-    final novoSaldo = storage.credito + valor;
-    await storage.setCredito(novoSaldo);
+  Future<void> _iniciarAdicaoCredito(double valor, String metodo) async {
+    if (!mounted) return;
 
     setState(() {
-      _loading = false;
-      _valorSelecionado = null;
+      _loading = true;
     });
-    _valorCtrl.clear();
 
-    if (!mounted) return;
-    CustomAlert.show(
-      context,
-      title: 'Crédito adicionado!',
-      message:
-          'R\$ ${valor.toStringAsFixed(2)} via $metodo.\n\n'
-          'Novo saldo: R\$ ${novoSaldo.toStringAsFixed(2)}',
-      onConfirm: () {},
-    );
+    try {
+      debugPrint('=== NOVO CRÉDITO ===');
+      debugPrint('Valor: ${valor.toStringAsFixed(2)}');
+      debugPrint('Método: $metodo');
+
+      if (!mounted) return;
+
+      CustomAlert.show(
+        context,
+        title: 'Crédito',
+        message:
+            'A consulta de saldo já está integrada.\n\n'
+            'A criação do crédito aguarda o endpoint '
+            'de registro pendente do backend.',
+        onConfirm: () {},
+      );
+    } catch (e) {
+      debugPrint('Erro ao iniciar crédito: $e');
+
+      if (!mounted) return;
+
+      CustomAlert.show(
+        context,
+        title: 'Erro',
+        message: 'Não foi possível iniciar a adição de crédito.',
+        onConfirm: () {},
+      );
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final credito = context.watch<StorageProvider>().credito;
-
     return Scaffold(
       bottomNavigationBar: const AppBottomNavBar(currentIndex: 2),
       backgroundColor: AppColors.background,
       body: Column(
         children: [
-          _buildHeader(credito),
+          _buildHeader(),
+
           Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  _buildLabel('VALOR RÁPIDO'),
-                  const SizedBox(height: 12),
-                  _buildValoresRapidos(),
-                  const SizedBox(height: 24),
-                  _buildLabel('OUTRO VALOR'),
-                  const SizedBox(height: 12),
-                  _buildInputValor(),
-                  if (_valorAtivo != null) ...[
+            child: RefreshIndicator(
+              onRefresh: _carregarSaldo,
+              color: AppColors.bluePrimary,
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 40),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    _buildLabel('VALOR RÁPIDO'),
                     const SizedBox(height: 12),
-                    _buildResumoBadge(),
+                    _buildValoresRapidos(),
+                    const SizedBox(height: 24),
+                    _buildLabel('OUTRO VALOR'),
+                    const SizedBox(height: 12),
+                    _buildInputValor(),
+                    if (_valorAtivo != null) ...[
+                      const SizedBox(height: 12),
+                      _buildResumoBadge(),
+                    ],
+                    const SizedBox(height: 24),
+                    _buildLabel('FORMA DE PAGAMENTO'),
+                    const SizedBox(height: 12),
+                    if (_loading)
+                      const Center(
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(
+                              color: AppColors.bluePrimary,
+                            ),
+                            SizedBox(height: 8),
+                            Text(
+                              'Processando...',
+                              style: TextStyle(color: AppColors.textEmpty),
+                            ),
+                          ],
+                        ),
+                      )
+                    else
+                      ..._metodos.map(
+                        (metodo) => _buildMetodoBtn(
+                          metodo['key'] as String,
+                          metodo['label'] as String,
+                          metodo['icon'] as IconData,
+                        ),
+                      ),
                   ],
-                  const SizedBox(height: 24),
-                  _buildLabel('FORMA DE PAGAMENTO'),
-                  const SizedBox(height: 12),
-                  if (_loading)
-                    const Center(
-                      child: Column(
-                        children: [
-                          CircularProgressIndicator(
-                            color: AppColors.bluePrimary,
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Processando...',
-                            style: TextStyle(color: AppColors.textEmpty),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    ..._metodos.map(
-                      (m) => _buildMetodoBtn(
-                        m['key'] as String,
-                        m['label'] as String,
-                        m['icon'] as IconData,
-                      ),
-                    ),
-                ],
+                ),
               ),
             ),
           ),
@@ -155,7 +274,7 @@ class _CreditoScreenState extends State<CreditoScreen> {
     );
   }
 
-  Widget _buildHeader(double credito) {
+  Widget _buildHeader() {
     return Container(
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
@@ -167,7 +286,6 @@ class _CreditoScreenState extends State<CreditoScreen> {
             right: -55,
             child: _circle(150, AppColors.circleDeco1),
           ),
-
           Positioned(
             bottom: -45,
             left: -45,
@@ -199,28 +317,69 @@ class _CreditoScreenState extends State<CreditoScreen> {
                       size: 28,
                     ),
                     const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'SALDO ATUAL',
-                          style: TextStyle(
-                            fontSize: 11,
-                            letterSpacing: 1,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textSection,
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            'SALDO ATUAL',
+                            style: TextStyle(
+                              fontSize: 11,
+                              letterSpacing: 1,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textSection,
+                            ),
                           ),
-                        ),
-                        Text(
-                          'R\$ ${credito.toStringAsFixed(2)}',
-                          style: const TextStyle(
-                            fontSize: 26,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                        ),
-                      ],
+
+                          const SizedBox(height: 4),
+
+                          if (_loadingSaldo)
+                            const SizedBox(
+                              width: 22,
+                              height: 22,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AppColors.bluePrimary,
+                              ),
+                            )
+                          else if (_erroSaldo != null)
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _erroSaldo!,
+                                  style: const TextStyle(
+                                    fontSize: 12,
+                                    color: Colors.red,
+                                  ),
+                                ),
+
+                                TextButton(
+                                  onPressed: _carregarSaldo,
+                                  child: const Text('Tentar novamente'),
+                                ),
+                              ],
+                            )
+                          else
+                            Text(
+                              'R\$ ${_saldoAtual.toStringAsFixed(2)}',
+                              style: const TextStyle(
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.textPrimary,
+                              ),
+                            ),
+                        ],
+                      ),
                     ),
+                    if (!_loadingSaldo)
+                      IconButton(
+                        onPressed: _carregarSaldo,
+                        icon: const Icon(
+                          Icons.refresh,
+                          color: AppColors.bluePrimary,
+                        ),
+                      ),
                   ],
                 ),
               ),
@@ -233,13 +392,15 @@ class _CreditoScreenState extends State<CreditoScreen> {
 
   Widget _buildValoresRapidos() {
     return Row(
-      children: _valoresRapidos.map((v) {
-        final ativo = _valorSelecionado == v;
+      children: _valoresRapidos.map((valor) {
+        final ativo = _valorSelecionado == valor;
         return Expanded(
           child: Padding(
-            padding: EdgeInsets.only(right: v == _valoresRapidos.last ? 0 : 8),
+            padding: EdgeInsets.only(
+              right: valor == _valoresRapidos.last ? 0 : 8,
+            ),
             child: OutlinedButton(
-              onPressed: _loading ? null : () => _selecionarRapido(v),
+              onPressed: _loading ? null : () => _selecionarRapido(valor),
               style: OutlinedButton.styleFrom(
                 backgroundColor: ativo
                     ? AppColors.bluePrimary
@@ -255,7 +416,7 @@ class _CreditoScreenState extends State<CreditoScreen> {
                 minimumSize: const Size.fromHeight(52),
               ),
               child: Text(
-                'R\$ ${v.toInt()}',
+                'R\$ ${valor.toInt()}',
                 style: const TextStyle(fontWeight: FontWeight.bold),
               ),
             ),
@@ -295,7 +456,11 @@ class _CreditoScreenState extends State<CreditoScreen> {
                 FilteringTextInputFormatter.allow(RegExp(r'[0-9,.]')),
               ],
               enabled: !_loading,
-              onChanged: (_) => setState(() => _valorSelecionado = null),
+              onChanged: (_) {
+                setState(() {
+                  _valorSelecionado = null;
+                });
+              },
               decoration: const InputDecoration(
                 hintText: '0,00',
                 hintStyle: TextStyle(color: AppColors.textEmpty),
@@ -349,7 +514,7 @@ class _CreditoScreenState extends State<CreditoScreen> {
       child: Material(
         color: Colors.transparent,
         child: InkWell(
-          onTap: () => _handleMetodo(key),
+          onTap: _loading ? null : () => _handleMetodo(key),
           borderRadius: BorderRadius.circular(14),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -380,19 +545,23 @@ class _CreditoScreenState extends State<CreditoScreen> {
     );
   }
 
-  Widget _buildLabel(String text) => Text(
-    text,
-    style: const TextStyle(
-      fontSize: 11,
-      fontWeight: FontWeight.bold,
-      letterSpacing: 1.2,
-      color: AppColors.textSection,
-    ),
-  );
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: const TextStyle(
+        fontSize: 11,
+        fontWeight: FontWeight.bold,
+        letterSpacing: 1.2,
+        color: AppColors.textSection,
+      ),
+    );
+  }
 
-  Widget _circle(double size, Color color) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-  );
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
 }
