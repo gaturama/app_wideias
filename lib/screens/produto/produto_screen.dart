@@ -27,6 +27,8 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
 
   List<String> _grupos = [];
 
+  int? _idCardapio;
+
   String? _grupoSelecionado;
   String? _subgrupoSelecionado;
 
@@ -47,7 +49,7 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
   Future<void> _carregarProdutos() async {
     try {
       final authProvider = context.read<AuthProvider>();
-
+      final storage = context.read<StorageProvider>();
       final user = authProvider.user;
 
       if (user == null) {
@@ -62,27 +64,22 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
         throw Exception('UID do cliente não encontrado.');
       }
 
+      final eventoId = storage.locationId;
+
+      if (eventoId == null || eventoId.isEmpty) {
+        throw Exception('Evento não identificado.');
+      }
+
       debugPrint('=== SESSÃO CARDÁPIO ===');
-
-      debugPrint(
-        'IDCliente disponível: '
-        '${user.id.isNotEmpty}',
-      );
-
-      debugPrint(
-        'UID disponível: '
-        '${user.uid.isNotEmpty}',
-      );
-
-      debugPrint(
-        'Token disponível: '
-        '${user.token.isNotEmpty}',
-      );
+      debugPrint('IDCliente disponível: ${user.id.isNotEmpty}');
+      debugPrint('UID disponível: ${user.uid.isNotEmpty}');
+      debugPrint('Token disponível: ${user.token.isNotEmpty}');
+      debugPrint('Evento ID: $eventoId');
 
       final response = await _productService.getCardapio(
         appClienteToken: user.token,
-        appClientUid: user.uid,
-        cardapioId: '11588',
+        appClienteUid: user.uid,
+        cardapioId: eventoId,
       );
 
       final cardapio = response['cardapio'] as Map<String, dynamic>?;
@@ -91,17 +88,27 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
         throw Exception('Cardápio não encontrado.');
       }
 
+      final idCardapio = int.tryParse(cardapio['ID']?.toString() ?? '');
+
+      if (idCardapio == null) {
+        throw Exception('ID do cardápio não encontrado.');
+      }
+
       final produtos = (cardapio['produtos'] as List<dynamic>? ?? [])
           .cast<Map<String, dynamic>>();
 
       final grupos = (cardapio['grupos'] as List<dynamic>? ?? [])
           .cast<Map<String, dynamic>>();
 
-      if (!mounted) {
-        return;
-      }
+      debugPrint('=== CARDÁPIO CARREGADO ===');
+      debugPrint('Evento ID: $eventoId');
+      debugPrint('Cardápio ID: $idCardapio');
+      debugPrint('Produtos: ${produtos.length}');
+
+      if (!mounted) return;
 
       setState(() {
+        _idCardapio = idCardapio;
         _produtosApi = produtos;
 
         _grupos = grupos
@@ -110,15 +117,12 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
             .toList();
 
         _aplicarFiltros();
-
         _loading = false;
       });
     } catch (e) {
       debugPrint('Erro ao carregar cardápio: $e');
 
-      if (!mounted) {
-        return;
-      }
+      if (!mounted) return;
 
       setState(() {
         _loading = false;
@@ -145,6 +149,7 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
     _produtos = filtrados.map((produto) {
       return ProdutoModel.fromJson({
         'id': produto['ID'].toString(),
+        'idCardapio': _idCardapio ?? 0,
         'name': produto['Descricao']?.toString() ?? '',
         'price': (produto['Valor'] as num?)?.toDouble() ?? 0.0,
         'description': produto['SubGrupo']?.toString() ?? '',
@@ -169,9 +174,22 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
   }
 
   void _adicionarAoCarrinho(ProdutoModel produto) {
+    final idCardapio = _idCardapio;
+
+    if (idCardapio == null) {
+      CustomAlert.show(
+        context,
+        title: 'Erro',
+        message: 'Não foi possível identificar o cardápio.',
+      );
+
+      return;
+    }
+
     final item = CartItemModel(
       cartEntryId: '${produto.id}-${DateTime.now().millisecondsSinceEpoch}',
       id: produto.id,
+      idCardapio: idCardapio,
       name: produto.name,
       imageUrl: produto.imageUrl,
       price: produto.price,

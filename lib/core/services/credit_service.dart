@@ -76,4 +76,63 @@ class CreditService {
 
     return data;
   }
+
+  Future<Map<String, dynamic>> atualizarPagamentoCredito({
+    required String creditoUid,
+    required String appClienteToken,
+    required String appClienteUid,
+    required Map<String, dynamic> pagamento,
+  }) async {
+    if (_basicUser.isEmpty || _basicPassword.isEmpty) {
+      throw Exception('Basic Auth não configurado.');
+    }
+
+    final basicEncoded = base64Encode(
+      utf8.encode('$_basicUser:$_basicPassword'),
+    );
+
+    final url = '$_baseUrl/creditos/atualizarpagamento/$creditoUid';
+
+    debugPrint('=== ATUALIZAR PAGAMENTO CRÉDITO ===');
+    debugPrint('Crédito UID presente: ${creditoUid.isNotEmpty}');
+    debugPrint('Token presente: ${appClienteToken.isNotEmpty}');
+    debugPrint('Cliente UID presente: ${appClienteUid.isNotEmpty}');
+
+    final body = {'pagamento': pagamento};
+
+    final response = await http.post(
+      Uri.parse(url),
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $basicEncoded',
+        'AppClienteToken': appClienteToken,
+        'AppClinteUID': appClienteUid,
+      },
+      body: jsonEncode(body),
+    );
+
+    debugPrint('HTTP ATUALIZAR CRÉDITO: ${response.statusCode}');
+
+    debugPrint('BODY ATUALIZAR CRÉDITO: ${response.body}');
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Erro ao atualizar pagamento do crédito '
+        '(${response.statusCode}): ${response.body}',
+      );
+    }
+
+    if (response.body.trim().isEmpty) {
+      return {};
+    }
+
+    final data = jsonDecode(response.body);
+
+    if (data is Map<String, dynamic>) {
+      return data;
+    }
+
+    return {};
+  }
 }

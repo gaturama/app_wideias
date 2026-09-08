@@ -8,6 +8,7 @@ import '../../providers/storage_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_alert.dart';
 import '../../core/services/google_pay_service.dart';
+import '../../core/services/order_service.dart';
 
 class PagamentoScreen extends StatefulWidget {
   const PagamentoScreen({super.key});
@@ -21,10 +22,14 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   String? _locationId;
   String? _observacoes;
   String? _mesa;
+  int? _idEvento;
   bool _usarCredito = false;
   bool _loading = false;
 
   final GooglePayService _googlePayService = GooglePayService();
+  final OrderService _orderService = OrderService();
+
+  Map<String, dynamic>? _pedidoBackend;
 
   static const _metodos = [
     {'key': 'PIX', 'label': 'PIX', 'icon': Icons.pix},
@@ -35,6 +40,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map?;
       if (args == null) return;
@@ -43,7 +49,13 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         _locationId = args['locationId']?.toString();
         _observacoes = args['observacoes']?.toString();
         _mesa = args['mesa']?.toString();
+        _idEvento = int.tryParse(args['idEvento']?.toString() ?? '');
       });
+
+      debugPrint('=== DADOS PAGAMENTO ===');
+      debugPrint('Location ID: $_locationId');
+      debugPrint('ID Evento: $_idEvento');
+      debugPrint('Itens: ${_cart.length}');
     });
   }
 
@@ -57,67 +69,98 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   double get _totalFinal => _totalCarrinho - _creditoAplicado;
 
   Future<void> _handleMetodo(String key) async {
-    if (key == 'PIX') {
-      final pago = await Navigator.of(
+    if (_cart.isEmpty) {
+      CustomAlert.show(
         context,
-      ).pushNamed('/pix', arguments: {'valorTotal': _totalFinal});
-
-      if (pago == true) {
-        _finalizarPagamento('PIX');
-      }
+        title: 'Carrinho vazio',
+        message: 'Adicione produtos antes de continuar.',
+      );
       return;
     }
 
-    if (key == 'Google Pay') {
-      try {
-        final disponivel = await _googlePayService.isReadyToPay();
+    try {
+      setState(() => _loading = true);
 
-        if (!mounted) return;
+      final pedido = await _garantirPedidoCriado();
 
-        if (!disponivel) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text(
-                'Google Pay não está disponível neste dispositivo.',
-              ),
-            ),
-          );
+      debugPrint('Pedido disponível para pagamento: $pedido');
 
-          return;
-        }
-
-        final resultado = await _googlePayService.pay(amount: _totalFinal);
-
-        if (!mounted) return;
-
-        if (resultado['status'] == 'PAID') {
-          _finalizarPagamento('Google Pay');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Não foi possível confirmar o pagamento.'),
-            ),
-          );
-        }
-      } catch (e) {
-        if (!mounted) return;
-
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text('Erro no Google Pay: $e')));
-      }
-
-      return;
-    }
-
-    if (key == 'Samsung Pay') {
       if (!mounted) return;
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Samsung Pay ainda não está integrado.')),
-      );
+      setState(() => _loading = false);
 
-      return;
+      if (key == 'PIX') {
+        final pago = await Navigator.of(
+          context,
+        ).pushNamed('/pix', arguments: {'valorTotal': _totalFinal});
+
+        if (pago == true) {
+          _finalizarPagamento('PIX');
+        }
+        return;
+      }
+
+      if (key == 'Google Pay') {
+        try {
+          final disponivel = await _googlePayService.isReadyToPay();
+
+          if (!mounted) return;
+
+          if (!disponivel) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Google Pay não está disponível neste dispositivo.',
+                ),
+              ),
+            );
+
+            return;
+          }
+
+          final resultado = await _googlePayService.pay(amount: _totalFinal);
+
+          if (!mounted) return;
+
+          if (resultado['status'] == 'PAID') {
+            _finalizarPagamento('Google Pay');
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Não foi possível confirmar o pagamento.'),
+              ),
+            );
+          }
+        } catch (e) {
+          if (!mounted) return;
+
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Erro no Google Pay: $e')));
+        }
+
+        return;
+      }
+
+      if (key == 'Samsung Pay') {
+        if (!mounted) return;
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Samsung Pay ainda não está integrado.'),
+          ),
+        );
+
+        return;
+      }
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Erro ao processar pagamento: $e')),
+      );
     }
   }
 
@@ -133,6 +176,83 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         );
       }
     } catch (_) {}
+  }
+
+  Future<Map<String, dynamic>> _garantirPedidoCriado() async {
+    if (_pedidoBackend != null) {
+      debugPrint('Pedido já criado. Reutilizando pedido existente.');
+      return _pedidoBackend!;
+    }
+
+    final user = context.read<AuthProvider>().user;
+
+    if (user == null) {
+      throw Exception('Usuário não autenticado.');
+    }
+
+    if (user.token.isEmpty) {
+      throw Exception('Token do usuário não encontrado.');
+    }
+
+    if (user.uid.isEmpty) {
+      throw Exception('UID do usuário não encontrado.');
+    }
+
+    if (_cart.isEmpty) {
+      throw Exception('Carrinho vazio.');
+    }
+
+    final idEvento = _idEvento;
+
+    if (idEvento == null || idEvento <= 0) {
+      throw Exception('Não foi possível identificar o evento do pedido.');
+    }
+
+    final List<Map<String, dynamic>> itens = [];
+
+    for (final item in _cart) {
+      final idProduto = int.tryParse(item.id);
+
+      if (idProduto == null || idProduto <= 0) {
+        throw Exception('ID inválido para o produto "${item.name}".');
+      }
+
+      if (item.idCardapio <= 0) {
+        throw Exception('Cardápio inválido para o produto "${item.name}".');
+      }
+
+      if (item.qty <= 0) {
+        throw Exception('Quantidade inválida para o produto "${item.name}".');
+      }
+
+      itens.add({
+        'idProduto': idProduto,
+        'idCardapio': item.idCardapio,
+        'quantidade': item.qty,
+      });
+    }
+
+    debugPrint('=== CRIANDO PEDIDO ===');
+    debugPrint('Cliente UID disponível: ${user.uid.isNotEmpty}');
+    debugPrint('Token disponível: ${user.token.isNotEmpty}');
+    debugPrint('ID Evento: $idEvento');
+    debugPrint('Valor total: $_totalCarrinho');
+    debugPrint('Quantidade de itens: ${itens.length}');
+
+    final response = await _orderService.criarPedido(
+      appClienteToken: user.token,
+      appClienteUid: user.uid,
+      idEvento: idEvento,
+      valorTotal: _totalCarrinho,
+      itens: itens,
+    );
+
+    debugPrint('=== PEDIDO CRIADO ===');
+    debugPrint('Resposta: $response');
+
+    _pedidoBackend = response;
+
+    return response;
   }
 
   Future<void> _finalizarPagamento(String metodo) async {

@@ -111,8 +111,10 @@ class _CarrinhoScreenState extends State<CarrinhoScreen> {
         arguments: {
           'cart': _cart,
           'locationId': storage.locationId,
+          'idEvento': storage.locationId,
           'observacoes': _obsCtrl.text,
           'mesa': null,
+          'total': _total,
         },
       );
     }

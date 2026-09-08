@@ -23,6 +23,10 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
   String _enderecoAtual = 'Buscando localização...';
   String? _erro;
 
+  static const bool _usarLocalizacaoTeste = true;
+  static const double _latitudeTeste = -27.0288295;
+  static const double _longitudeTeste = -48.6355388;
+
   @override
   void initState() {
     super.initState();
@@ -33,82 +37,15 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
     try {
       await Future.wait([_buscarLocalizacaoUsuario(), _buscarEventos()]);
     } catch (e) {
-      print('Erro em _inicializar: $e');
+      debugPrint('Erro em _inicializar: $e');
     }
   }
 
-  Future<void> _buscarLocalizacaoUsuario() async {
-    try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied) {
-        perm = await Geolocator.requestPermission();
-      }
-      if (perm == LocationPermission.deniedForever ||
-          perm == LocationPermission.denied) {
-        setState(() => _enderecoAtual = 'Localização não disponível');
-        return;
-      }
-
-      Position? pos;
-      try {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.low,
-          timeLimit: const Duration(seconds: 10),
-        );
-      } catch (_) {
-        pos = await Geolocator.getLastKnownPosition();
-      }
-
-      if (pos == null) {
-        setState(() => _enderecoAtual = 'Localização não disponível');
-        return;
-      }
-
-      final placemarks = await placemarkFromCoordinates(
-        pos.latitude,
-        pos.longitude,
-      );
-
-      if (placemarks.isNotEmpty) {
-        final p = placemarks.first;
-        setState(
-          () => _enderecoAtual = '${p.locality}, ${p.administrativeArea}',
-        );
-      }
-    } catch (e) {
-      print('Erro localização: $e');
-      setState(() => _enderecoAtual = 'Localização não disponível');
-    }
-  }
-
-  Future<void> _buscarEventos({bool refresh = false}) async {
-    if (refresh) setState(() => _refreshing = true);
-
-    try {
-      LocationPermission perm = await Geolocator.checkPermission();
-      if (perm == LocationPermission.denied ||
-          perm == LocationPermission.deniedForever) {
-        setState(() {
-          _erro = 'Permissão de localização negada.';
-          _loading = false;
-          _refreshing = false;
-        });
-        return;
-      }
-
-      Position? pos;
-      try {
-        pos = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.low,
-          timeLimit: const Duration(seconds: 10),
-        );
-      } catch (_) {
-        pos = await Geolocator.getLastKnownPosition();
-      }
-
-      pos ??= Position(
-        latitude: -27.0288295,
-        longitude: -48.6355388,
+  Future<Position?> _obterPosicao() async {
+    if (_usarLocalizacaoTeste) {
+      return Position(
+        latitude: _latitudeTeste,
+        longitude: _longitudeTeste,
         timestamp: DateTime.now(),
         accuracy: 0,
         altitude: 0,
@@ -118,22 +55,137 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
         speed: 0,
         speedAccuracy: 0,
       );
+    }
 
-      final auth = context.read<AuthProvider>();
-      final token = auth.user?.token ?? '';
-      final id = auth.user?.id ?? '';
+    LocationPermission perm = await Geolocator.checkPermission();
 
-      print('=== CHECK-IN DATA ===');
-      print('Token: $token');
-      print('ID: $id');
-      print('Lat: ${pos.latitude} | Lng: ${pos.longitude}');
+    if (perm == LocationPermission.denied) {
+      perm = await Geolocator.requestPermission();
+    }
+
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) {
+      return null;
+    }
+
+    try {
+      return await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.low,
+        timeLimit: const Duration(seconds: 10),
+      );
+    } catch (_) {
+      return await Geolocator.getLastKnownPosition();
+    }
+  }
+
+  Future<void> _buscarLocalizacaoUsuario() async {
+    try {
+      final pos = await _obterPosicao();
+
+      if (pos == null) {
+        if (!mounted) return;
+        setState(() {
+          _enderecoAtual = 'Localização não disponível';
+        });
+        return;
+      }
+
+      final placemarks = await placemarkFromCoordinates(
+        pos.latitude,
+        pos.longitude,
+      );
+
+      if (!mounted) return;
+
+      if (placemarks.isNotEmpty) {
+        final p = placemarks.first;
+        final cidade = p.locality?.trim() ?? '';
+        final estado = p.administrativeArea?.trim() ?? '';
+
+        setState(() {
+          if (cidade.isNotEmpty && estado.isNotEmpty) {
+            _enderecoAtual = '$cidade, $estado';
+          } else if (cidade.isNotEmpty) {
+            _enderecoAtual = cidade;
+          } else if (estado.isNotEmpty) {
+            _enderecoAtual = estado;
+          } else {
+            _enderecoAtual = 'Localização encontrada';
+          }
+        });
+      } else {
+        setState(() {
+          _enderecoAtual = 'Localização encontrada';
+        });
+      }
+    } catch (e) {
+      debugPrint('Erro localização: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _enderecoAtual = 'Localização não disponível';
+      });
+    }
+  }
+
+  Future<void> _buscarEventos({bool refresh = false}) async {
+    if (refresh && mounted) {
+      setState(() {
+        _refreshing = true;
+      });
+    }
+
+    try {
+      final user = context.read<AuthProvider>().user;
+
+      if (user == null) {
+        throw Exception('Usuário não autenticado.');
+      }
+
+      if (user.token.isEmpty) {
+        throw Exception('Token do usuário não encontrado.');
+      }
+
+      if (user.id.isEmpty) {
+        throw Exception('IDCliente não encontrado.');
+      }
+
+      if (user.uid.isEmpty) {
+        throw Exception('UID do usuário não encontrado.');
+      }
+
+      final pos = await _obterPosicao();
+
+      if (pos == null) {
+        if (!mounted) return;
+
+        setState(() {
+          _erro = 'Localização não disponível.';
+          _loading = false;
+          _refreshing = false;
+        });
+
+        return;
+      }
+
+      debugPrint('=== CHECK-IN DATA ===');
+      debugPrint('Token presente: ${user.token.isNotEmpty}');
+      debugPrint('Token tamanho: ${user.token.length}');
+      debugPrint('IDCliente: ${user.id}');
+      debugPrint('UID presente: ${user.uid.isNotEmpty}');
+      debugPrint('UID tamanho: ${user.uid.length}');
+      debugPrint('Lat: ${pos.latitude} | Lng: ${pos.longitude}');
 
       final eventos = await EventoService.buscarEventos(
-        token: token,
-        idCliente: id,
+        token: user.token,
+        idCliente: user.id,
+        appClienteUid: user.uid,
         latitude: pos.latitude,
         longitude: pos.longitude,
       );
+
+      if (!mounted) return;
 
       setState(() {
         _locais = eventos;
@@ -142,14 +194,15 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
         _refreshing = false;
       });
     } catch (e) {
-      print('Erro em _buscarEventos: $e');
-      if (mounted) {
-        setState(() {
-          _erro = 'Não foi possível carregar os locais.';
-          _loading = false;
-          _refreshing = false;
-        });
-      }
+      debugPrint('Erro em _buscarEventos: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _erro = 'Não foi possível carregar os locais.';
+        _loading = false;
+        _refreshing = false;
+      });
     }
   }
 
@@ -168,7 +221,9 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
           item.name,
           tipo,
         );
+
         if (!mounted) return;
+
         Navigator.of(
           context,
         ).pushNamedAndRemoveUntil('/home', (route) => false);
@@ -199,12 +254,23 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
                   ),
                 ),
                 GestureDetector(
-                  onTap: () => _buscarEventos(refresh: true),
-                  child: const Icon(
-                    Icons.refresh,
-                    color: AppColors.bluePrimary,
-                    size: 20,
-                  ),
+                  onTap: _refreshing
+                      ? null
+                      : () => _buscarEventos(refresh: true),
+                  child: _refreshing
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.bluePrimary,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.refresh,
+                          color: AppColors.bluePrimary,
+                          size: 20,
+                        ),
                 ),
               ],
             ),
@@ -356,7 +422,9 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         itemCount: _locais.length,
-        itemBuilder: (_, i) => _buildCard(_locais[i]),
+        itemBuilder: (_, i) {
+          return _buildCard(_locais[i]);
+        },
       ),
     );
   }
@@ -439,9 +507,11 @@ class _LocalizacaoScreenState extends State<LocalizacaoScreen> {
     );
   }
 
-  Widget _circle(double size, Color color) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-  );
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
 }

@@ -14,7 +14,7 @@ class ProductService {
 
   Future<Map<String, dynamic>> getCardapio({
     required String appClienteToken,
-    required String appClientUid,
+    required String appClienteUid,
     required String cardapioId,
   }) async {
     if (_basicUser.isEmpty || _basicPassword.isEmpty) {
@@ -32,7 +32,7 @@ class ProductService {
       '${_basicUser.isNotEmpty && _basicPassword.isNotEmpty}',
     );
 
-    debugPrint('UID disponível: ${appClientUid.isNotEmpty}');
+    debugPrint('UID disponível: ${appClienteUid.isNotEmpty}');
 
     debugPrint('Token disponível: ${appClienteToken.isNotEmpty}');
 
@@ -42,7 +42,7 @@ class ProductService {
         'Accept': 'application/json',
         'Authorization': 'Basic $basicEncoded',
         'AppClienteToken': appClienteToken,
-        'AppClientUID': appClientUid,
+        'AppClienteUID': appClienteUid,
       },
     );
 

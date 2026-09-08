@@ -1,6 +1,7 @@
 class CartItemModel {
   final String cartEntryId;
   final String id;
+  final int idCardapio;
   final String name;
   final String? imageUrl;
   final double price;
@@ -13,6 +14,7 @@ class CartItemModel {
     required this.cartEntryId,
     required this.id,
     required this.name,
+    required this.idCardapio,
     this.imageUrl,
     required this.price,
     this.qty = 1,
@@ -35,6 +37,7 @@ class CartItemModel {
     cartEntryId: cartEntryId,
     id: id,
     name: name,
+    idCardapio: idCardapio,
     imageUrl: imageUrl,
     price: price,
     qty: qty ?? this.qty,
@@ -47,6 +50,7 @@ class CartItemModel {
     'cartEntryId': cartEntryId,
     'id': id,
     'name': name,
+    'idCardapio': idCardapio,
     'imageUrl': imageUrl,
     'price': price,
     'qty': qty,
@@ -60,6 +64,7 @@ class CartItemModel {
   factory CartItemModel.fromJson(Map<String, dynamic> json) => CartItemModel(
     cartEntryId: json['cartEntryId']?.toString() ?? '',
     id: json['id']?.toString() ?? '',
+    idCardapio: int.tryParse(json['idCardapio']?.toString() ?? '',)?? 0,
     name: json['name']?.toString() ?? '',
     imageUrl: json['imageUrl']?.toString(),
     price: (json['price'] as num?)?.toDouble() ?? 0.0,

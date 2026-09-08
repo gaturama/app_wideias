@@ -69,6 +69,7 @@ class _DescricaoProdutoScreenState extends State<DescricaoProdutoScreen> {
     } else if (produtoArg is CartItemModel) {
       _produto = ProdutoModel(
         id: produtoArg.id,
+        idCardapio: produtoArg.idCardapio,
         name: produtoArg.name,
         imageUrl: produtoArg.imageUrl,
         price: produtoArg.price,
@@ -144,6 +145,7 @@ class _DescricaoProdutoScreenState extends State<DescricaoProdutoScreen> {
           : '${_produto!.id}-${DateTime.now().millisecondsSinceEpoch}',
       id: _produto!.id,
       name: _produto!.name,
+      idCardapio: _produto!.idCardapio,
       imageUrl: _produto!.imageUrl,
       price: _produto!.price,
       qty: _editar && _itemEditando != null ? _itemEditando!.qty : 1,

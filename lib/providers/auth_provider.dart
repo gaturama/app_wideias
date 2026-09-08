@@ -38,95 +38,71 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final prefs = await SharedPreferences.getInstance();
       final emailNormalizado = email.trim().toLowerCase();
-      final chave = 'local_senha_$emailNormalizado';
-      final senhaLocal = prefs.getString(chave);
 
-      debugPrint('=== LOGIN LOCAL ===');
-      debugPrint('Senha local encontrada: ${senhaLocal != null}');
-
-      if (senhaLocal != null) {
-        if (senhaLocal != senha) {
-          _loading = false;
-          notifyListeners();
-
-          return 'Senha incorreta';
-        }
-
-        final dadosJson = prefs.getString('local_dados_$emailNormalizado');
-
-        if (dadosJson != null) {
-          final dados = jsonDecode(dadosJson) as Map<String, dynamic>;
-
-          final uid = dados['uid']?.toString() ?? '';
-
-          if (uid.isNotEmpty) {
-            _user = UserModel(
-              id: dados['id']?.toString() ?? '',
-              uid: uid,
-              nome: dados['nome']?.toString() ?? '',
-              email: dados['email']?.toString() ?? emailNormalizado,
-              telefone: dados['telefone']?.toString() ?? '',
-              token: dados['token']?.toString() ?? '',
-            );
-
-            await _salvarSessao(_user!);
-            _loading = false;
-            notifyListeners();
-            return null;
-          }
-
-          debugPrint(
-            'Sessão local antiga sem UID. '
-            'Atualizando sessão pela API.',
-          );
-        }
-      }
+      debugPrint('=== LOGIN API ===');
 
       final result = await AuthService.login(
         email: emailNormalizado,
         senha: senha,
       );
 
-      if (result.sucesso && result.dados != null) {
-        final dados = result.dados!;
-        final idCliente = dados['IDCliente']?.toString() ?? '';
-        final uid = dados['UID']?.toString() ?? '';
-        final token = dados['Token']?.toString() ?? '';
-
-        debugPrint('Login realizado com sucesso.');
-        debugPrint(
-          'IDCliente recebido: '
-          '${idCliente.isNotEmpty}',
-        );
-        debugPrint('UID recebido: ${uid.isNotEmpty}');
-        debugPrint('Token recebido: ${token.isNotEmpty}');
-
-        _user = UserModel(
-          id: idCliente,
-          uid: uid,
-          nome: dados['Nome']?.toString() ?? '',
-          email: dados['Email']?.toString() ?? emailNormalizado,
-          telefone: dados['Telefone']?.toString() ?? '',
-          token: token,
-        );
-
-        await _salvarSessao(_user!);
+      if (!result.sucesso || result.dados == null) {
         _loading = false;
         notifyListeners();
-        return null;
+
+        return result.erro ?? 'Erro ao fazer login';
       }
+
+      final dados = result.dados!;
+
+      final idCliente = dados['IDCliente']?.toString() ?? '';
+
+      final uid = dados['UID']?.toString() ?? '';
+
+      final token =
+          dados['Token']?.toString() ?? dados['token']?.toString() ?? '';
+
+      if (idCliente.isEmpty) {
+        throw Exception('Backend não retornou IDCliente.');
+      }
+
+      if (uid.isEmpty) {
+        throw Exception('Backend não retornou UID.');
+      }
+
+      if (token.isEmpty) {
+        throw Exception('Backend não retornou Token.');
+      }
+
+      debugPrint('Login realizado com sucesso.');
+      debugPrint('IDCliente recebido: ${idCliente.isNotEmpty}');
+      debugPrint('UID recebido: ${uid.isNotEmpty}');
+      debugPrint('UID tamanho: ${uid.length}');
+      debugPrint('Token recebido: ${token.isNotEmpty}');
+      debugPrint('Token tamanho: ${token.length}');
+
+      _user = UserModel(
+        id: idCliente,
+        uid: uid,
+        nome: dados['Nome']?.toString() ?? '',
+        email: dados['Email']?.toString() ?? emailNormalizado,
+        telefone: dados['Telefone']?.toString() ?? '',
+        token: token,
+      );
+
+      await _salvarSessao(_user!);
 
       _loading = false;
       notifyListeners();
 
-      return result.erro ?? 'Erro ao fazer login';
+      return null;
     } catch (e) {
       debugPrint('Exception no AuthProvider.login: $e');
 
       _loading = false;
       notifyListeners();
+
       return 'Erro inesperado: $e';
     }
   }
@@ -189,7 +165,8 @@ class AuthProvider extends ChangeNotifier {
         final dados = result.dados!;
         final idCliente = dados['IDCliente']?.toString() ?? '';
         final uid = dados['UID']?.toString() ?? '';
-        final token = dados['Token']?.toString() ?? dados['token']?.toString() ?? '';
+        final token =
+            dados['Token']?.toString() ?? dados['token']?.toString() ?? '';
 
         _user = UserModel(
           id: idCliente,
@@ -218,6 +195,7 @@ class AuthProvider extends ChangeNotifier {
   }
 
   Future<void> logout() async {
+    final emailAtual = _user?.email.trim().toLowerCase();
     _user = null;
 
     final prefs = await SharedPreferences.getInstance();
@@ -228,7 +206,12 @@ class AuthProvider extends ChangeNotifier {
     await prefs.remove('user_email');
     await prefs.remove('user_phone');
 
-    notifyListeners();
+    if (emailAtual != null && emailAtual.isNotEmpty) {
+      await prefs.remove('local_dados_$emailAtual');
+      
+
+      notifyListeners();
+    }
   }
 
   Future<void> _salvarSessao(UserModel user) async {

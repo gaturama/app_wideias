@@ -308,4 +308,82 @@ class PaymentService {
       'endToEndId': pix?['end_to_end_id']?.toString(),
     };
   }
+
+  Future<Map<String, dynamic>?> getPaymentData(String orderId) async {
+    if (_sandboxToken.isEmpty) {
+      throw Exception('Token PagBank Sandbox não configurado.');
+    }
+
+    final response = await http.get(
+      Uri.parse('$_baseUrl/orders/$orderId'),
+      headers: {
+        'Authorization': 'Bearer $_sandboxToken',
+        'Accept': 'application/json',
+      },
+    );
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        'Erro ao consultar pagamento '
+        '(${response.statusCode}): ${response.body}',
+      );
+    }
+
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final charges = data['charges'] as List<dynamic>?;
+
+    if (charges == null || charges.isEmpty) {
+      return null;
+    }
+
+    final charge = charges.first as Map<String, dynamic>;
+    final status = charge['status']?.toString().toUpperCase();
+
+    if (status != 'PAID') {
+      return null;
+    }
+
+    final paymentResponse = charge['payment_response'] as Map<String, dynamic>?;
+    final rawData = paymentResponse?['raw_data'] as Map<String, dynamic>?;
+    final paymentMethod = charge['payment_method'] as Map<String, dynamic>?;
+    final card = paymentMethod?['card'] as Map<String, dynamic>?;
+    final wallet = card?['wallet'] as Map<String, dynamic>?;
+    final pix = paymentMethod?['pix'] as Map<String, dynamic>?;
+
+    return {
+      'orderId': data['id']?.toString(),
+      'chargeId': charge['id']?.toString(),
+      'referenceId': charge['reference_id']?.toString(),
+      'status': status,
+      'paidAt': charge['paid_at']?.toString(),
+      'paymentType': paymentMethod?['type']?.toString(),
+      'walletType': wallet?['type']?.toString(),
+      'nsu':
+          rawData?['nsu']?.toString() ??
+          paymentResponse?['reference']?.toString(),
+      'authorizationCode': rawData?['authorization_code']?.toString(),
+      'brand': card?['brand']?.toString(),
+      'bin': card?['first_digits']?.toString(),
+      'endToEndId': pix?['end_to_end_id']?.toString(),
+      'notificationId': pix?['notification_id']?.toString(),
+      'paymentResponseCode': paymentResponse?['code']?.toString(),
+      'paymentResponseMessage': paymentResponse?['message']?.toString(),
+    };
+  }
+
+  Map<String, dynamic> montarPagamentoBackend({
+    required Map<String, dynamic> pagBankData,
+    required String idTipoPagamento,
+  }) {
+    return {
+      'transactionCode': pagBankData['chargeId']?.toString() ?? '',
+      'transactionID': pagBankData['orderId']?.toString() ?? '',
+      'nsu': pagBankData['nsu']?.toString() ?? '',
+      'bin': pagBankData['bin']?.toString() ?? '',
+      'autoCode': pagBankData['authorizationCode']?.toString() ?? '',
+      'cardBrand': pagBankData['brand']?.toString().toUpperCase() ?? '',
+      'idTipoPagamento': idTipoPagamento,
+      'status': '1',
+    };
+  }
 }
