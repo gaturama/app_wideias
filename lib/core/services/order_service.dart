@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:wideias_app/models/cart_item_model.dart';
 
 class OrderService {
   static const String _baseUrl =
@@ -17,35 +18,38 @@ class OrderService {
     required String appClienteUid,
     required int idEvento,
     required double valorTotal,
-    required List<Map<String, dynamic>> itens,
+    required List<CartItemModel> cart,
+    String? observacao,
   }) async {
-    if (_basicUser.isEmpty || _basicPassword.isEmpty) {
-      throw Exception('Basic Auth não configurado');
-    }
-
-    if (appClienteToken.isEmpty) {
-      throw Exception('Token do cliente não encontrado.');
-    }
-
-    if (appClienteUid.isEmpty) {
-      throw Exception('UID do cliente não encontrado.');
-    }
-
-    if (itens.isEmpty) {
-      throw Exception('O pedido precisa possuir pelo menos um item.');
-    }
 
     final basicEncoded = base64Encode(
       utf8.encode('$_basicUser:$_basicPassword'),
     );
 
-    final url = '$_baseUrl/pedidos';
+    final itens = cart.map((item) {
+      final idProduto = int.tryParse(item.id);
+
+      if (idProduto == null || idProduto <= 0) {
+        throw Exception('ID inválido para o produto "${item.name}".');
+      }
+    
+
+      return {
+        'idProduto': idProduto,
+        'idCardapio': item.idCardapio,
+        'quantidade': item.qty,
+        'obs': item.observacao,
+      };
+    }).toList();
 
     final body = {
       'pedido': {
         'cliente': appClienteUid,
         'valorTotal': valorTotal,
         'idEvento': idEvento,
+        'obs': observacao?.trim().isEmpty == true
+            ? null
+            : observacao?.trim(),
         'itens': itens,
       },
     };
@@ -57,7 +61,7 @@ class OrderService {
     debugPrint('Quantidade de itens: ${itens.length}');
 
     final response = await http.post(
-      Uri.parse(url),
+      Uri.parse('$_baseUrl/pedidos'),
       headers: {
         'Accept': 'application/json',
         'Content-Type': 'application/json',
@@ -69,27 +73,23 @@ class OrderService {
     );
 
     debugPrint('HTTP PEDIDO: ${response.statusCode}');
-
     debugPrint('BODY PEDIDO: ${response.body}');
+
+    final decoded = jsonDecode(response.body);
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Erro ao criar pedido '
-        '(${response.statusCode}): ${response.body}',
+        decoded is Map && decoded['erro'] != null
+            ? decoded['erro'].toString()
+            : 'Erro ao criar pedido.',
       );
     }
 
-    if (response.body.trim().isEmpty) {
-      return {};
-    }
-
-    final data = jsonDecode(response.body);
-
-    if (data is! Map<String, dynamic>) {
+    if (decoded is! Map) {
       throw Exception('Resposta inválida ao criar pedido.');
     }
 
-    return data;
+    return Map<String, dynamic>.from(decoded);
   }
 
   Future<dynamic> getPedidos({

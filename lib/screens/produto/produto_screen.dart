@@ -50,7 +50,12 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
     try {
       final authProvider = context.read<AuthProvider>();
       final storage = context.read<StorageProvider>();
+      final eventoId = storage.locationId;
       final user = authProvider.user;
+
+      if (eventoId == null || eventoId.isEmpty) {
+        throw Exception('Evento não identificado.');
+      }
 
       if (user == null) {
         throw Exception('Usuário não autenticado.');
@@ -64,11 +69,6 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
         throw Exception('UID do cliente não encontrado.');
       }
 
-      final eventoId = storage.locationId;
-
-      if (eventoId == null || eventoId.isEmpty) {
-        throw Exception('Evento não identificado.');
-      }
 
       debugPrint('=== SESSÃO CARDÁPIO ===');
       debugPrint('IDCliente disponível: ${user.id.isNotEmpty}');
@@ -90,7 +90,7 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
 
       final idCardapio = int.tryParse(cardapio['ID']?.toString() ?? '');
 
-      if (idCardapio == null) {
+      if (idCardapio == null || idCardapio <= 0) {
         throw Exception('ID do cardápio não encontrado.');
       }
 
@@ -100,10 +100,16 @@ class _ProdutoScreenState extends State<ProdutoScreen> {
       final grupos = (cardapio['grupos'] as List<dynamic>? ?? [])
           .cast<Map<String, dynamic>>();
 
-      debugPrint('=== CARDÁPIO CARREGADO ===');
-      debugPrint('Evento ID: $eventoId');
-      debugPrint('Cardápio ID: $idCardapio');
-      debugPrint('Produtos: ${produtos.length}');
+      debugPrint('=== DEBUG CARDÁPIO ===');
+      debugPrint('ID usado no GET: $eventoId');
+      debugPrint('ID retornado pelo cardápio: ${cardapio['ID']}');
+
+      for (final produto in produtos) {
+        debugPrint(
+          'Produto: ID=${produto['ID']} '
+          'Descricao=${produto['Descricao']}',
+        );
+      }
 
       if (!mounted) return;
 

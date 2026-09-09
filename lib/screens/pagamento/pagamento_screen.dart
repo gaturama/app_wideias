@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/cart_item_model.dart';
 import '../../providers/pedidos_provider.dart';
@@ -40,10 +39,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map?;
       if (args == null) return;
+
       setState(() {
         _cart = List<CartItemModel>.from(args['cart'] ?? []);
         _locationId = args['locationId']?.toString();
@@ -60,12 +59,8 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   }
 
   double get _totalCarrinho => _cart.fold(0.0, (s, i) => s + i.precoTotal);
-
   double get _credito => context.read<StorageProvider>().credito;
-
-  double get _creditoAplicado =>
-      _usarCredito ? _credito.clamp(0, _totalCarrinho) : 0;
-
+  double get _creditoAplicado =>_usarCredito ? _credito.clamp(0, _totalCarrinho) : 0;
   double get _totalFinal => _totalCarrinho - _creditoAplicado;
 
   Future<void> _handleMetodo(String key) async {
@@ -78,78 +73,80 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       return;
     }
 
+    if (key == 'Samsung Pay') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Samsung Pay ainda não está integrado.')),
+      );
+      return;
+    }
+
     try {
-      setState(() => _loading = true);
-
-      final pedido = await _garantirPedidoCriado();
-
-      debugPrint('Pedido disponível para pagamento: $pedido');
-
-      if (!mounted) return;
-
-      setState(() => _loading = false);
-
       if (key == 'PIX') {
-        final pago = await Navigator.of(
-          context,
-        ).pushNamed('/pix', arguments: {'valorTotal': _totalFinal});
+        setState(() => _loading = true);
+
+        final pedido = await _garantirPedidoCriado();
+        final pedidoUid = pedido['uid']?.toString();
+
+        if (pedidoUid == null || pedidoUid.isEmpty) {
+          throw Exception('UID do pedido não encontrado.');
+        }
+
+        if (!mounted) return;
+
+        setState(() => _loading = false);
+
+        final pago = await Navigator.of(context).pushNamed(
+          '/pix',
+          arguments: {'valorTotal': _totalFinal, 'pedidoUid': pedidoUid},
+        );
+
+        if (!mounted) return;
 
         if (pago == true) {
-          _finalizarPagamento('PIX');
+          await _finalizarPagamento('PIX');
         }
+
         return;
       }
 
       if (key == 'Google Pay') {
-        try {
-          final disponivel = await _googlePayService.isReadyToPay();
+        setState(() => _loading = true);
 
-          if (!mounted) return;
+        final disponivel = await _googlePayService.isReadyToPay();
 
-          if (!disponivel) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Google Pay não está disponível neste dispositivo.',
-                ),
-              ),
-            );
-
-            return;
-          }
-
-          final resultado = await _googlePayService.pay(amount: _totalFinal);
-
-          if (!mounted) return;
-
-          if (resultado['status'] == 'PAID') {
-            _finalizarPagamento('Google Pay');
-          } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Não foi possível confirmar o pagamento.'),
-              ),
-            );
-          }
-        } catch (e) {
-          if (!mounted) return;
-
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('Erro no Google Pay: $e')));
-        }
-
-        return;
-      }
-
-      if (key == 'Samsung Pay') {
         if (!mounted) return;
 
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Samsung Pay ainda não está integrado.'),
-          ),
-        );
+        if (!disponivel) {
+          setState(() => _loading = false);
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text(
+                'Google Pay não está disponível neste dispositivo.',
+              ),
+            ),
+          );
+
+          return;
+        }
+
+        await _garantirPedidoCriado();
+
+        final resultado = await _googlePayService.pay(amount: _totalFinal);
+
+        if (!mounted) return;
+
+        setState(() => _loading = false);
+
+        if (resultado['status'] == 'PAID') {
+          await _finalizarPagamento('Google Pay');
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Não foi possível confirmar o pagamento.'),
+            ),
+          );
+        }
 
         return;
       }
@@ -164,23 +161,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     }
   }
 
-  Future<void> _abrirApp(String scheme, String fallback) async {
-    try {
-      final uri = Uri.parse(scheme);
-      if (await canLaunchUrl(uri)) {
-        await launchUrl(uri);
-      } else {
-        await launchUrl(
-          Uri.parse(fallback),
-          mode: LaunchMode.externalApplication,
-        );
-      }
-    } catch (_) {}
-  }
-
   Future<Map<String, dynamic>> _garantirPedidoCriado() async {
     if (_pedidoBackend != null) {
       debugPrint('Pedido já criado. Reutilizando pedido existente.');
+
       return _pedidoBackend!;
     }
 
@@ -208,8 +192,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       throw Exception('Não foi possível identificar o evento do pedido.');
     }
 
-    final List<Map<String, dynamic>> itens = [];
-
     for (final item in _cart) {
       final idProduto = int.tryParse(item.id);
 
@@ -224,12 +206,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       if (item.qty <= 0) {
         throw Exception('Quantidade inválida para o produto "${item.name}".');
       }
-
-      itens.add({
-        'idProduto': idProduto,
-        'idCardapio': item.idCardapio,
-        'quantidade': item.qty,
-      });
     }
 
     debugPrint('=== CRIANDO PEDIDO ===');
@@ -237,20 +213,27 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     debugPrint('Token disponível: ${user.token.isNotEmpty}');
     debugPrint('ID Evento: $idEvento');
     debugPrint('Valor total: $_totalCarrinho');
-    debugPrint('Quantidade de itens: ${itens.length}');
+    debugPrint('Quantidade de itens: ${_cart.length}');
 
     final response = await _orderService.criarPedido(
       appClienteToken: user.token,
       appClienteUid: user.uid,
       idEvento: idEvento,
       valorTotal: _totalCarrinho,
-      itens: itens,
+      cart: _cart,
+      observacao: _observacoes,
     );
 
-    debugPrint('=== PEDIDO CRIADO ===');
-    debugPrint('Resposta: $response');
+    final pedidoUid = response['uid']?.toString();
+
+    if (pedidoUid == null || pedidoUid.isEmpty) {
+      throw Exception('Backend não retornou o UID do pedido.');
+    }
 
     _pedidoBackend = response;
+
+    debugPrint('=== PEDIDO CRIADO ===');
+    debugPrint('UID presente: ${pedidoUid.isNotEmpty}');
 
     return response;
   }
@@ -284,8 +267,9 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       mesa: _mesa,
     );
 
-    setState(() => _loading = false);
     if (!mounted) return;
+
+    setState(() => _loading = false);
 
     CustomAlert.show(
       context,
@@ -450,13 +434,11 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             right: -70,
             child: _circle(160, AppColors.circleDeco1),
           ),
-
           Positioned(
             bottom: -60,
             left: -60,
             child: _circle(130, AppColors.circleDeco2),
           ),
-
           SizedBox(
             width: double.infinity,
             child: Column(
@@ -468,15 +450,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   color: Colors.white,
                   size: 68,
                 ),
-
                 const SizedBox(height: 8),
-
                 const Text(
                   'Total a pagar',
                   style: TextStyle(color: Colors.white, fontSize: 16),
                   textAlign: TextAlign.center,
                 ),
-
                 Text(
                   'R\$ ${_totalFinal.toStringAsFixed(2)}',
                   style: const TextStyle(
@@ -486,7 +465,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   ),
                   textAlign: TextAlign.center,
                 ),
-
                 if (_creditoAplicado > 0)
                   Text(
                     'Carrinho: R\$ ${_totalCarrinho.toStringAsFixed(2)} · Crédito: −R\$ ${_creditoAplicado.toStringAsFixed(2)}',
