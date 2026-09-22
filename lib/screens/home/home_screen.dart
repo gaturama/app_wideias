@@ -26,36 +26,71 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _carregarDados({bool refresh = false}) async {
-    if (refresh) setState(() => _refreshing = true);
+    if (refresh) {
+      setState(() => _refreshing = true);
+    }
+
     final auth = context.read<AuthProvider>();
     final pedidos = context.read<PedidosProvider>();
-    if (auth.user != null) await pedidos.carregar(auth.user!.id);
-    if (mounted)
+
+    if (auth.user != null) {
+      await pedidos.carregar(auth.user!.id);
+    }
+
+    if (mounted) {
       setState(() {
         _loading = false;
         _refreshing = false;
       });
+    }
   }
 
-  void _confirmarRetirada(OrderItemModel item) {
+  void _continuarPagamento(OrderItemModel item) {
+    Navigator.of(context).pushNamed(
+      '/pagamento',
+      arguments: {
+        'pedidoUid': item.backendUid ?? item.orderId,
+        'saldoPagamento': item.saldoPagamento,
+        'locationId': item.order?.location?.id,
+        'locationName': item.order?.location?.name,
+        'mesa': item.order?.mesa,
+      },
+    );
+  }
+
+  void _confirmarRetirada(List<OrderItemModel> itens) {
+    if (itens.isEmpty) return;
+
+    final pedido = itens.first;
+
+    if (!pedido.pagamentoConcluido) {
+      return;
+    }
+
+    final produtos = itens
+        .map((item) => '${item.quantity}x ${item.product?.name ?? 'Produto'}')
+        .join('\n');
+
     CustomAlert.show(
       context,
       title: 'Confirmar retirada',
-      message: 'Você está retirando "${item.product?.name ?? 'Produto'}"?',
+      message: 'Você está retirando este pedido?\n\n$produtos',
       confirmText: 'Sim',
       cancelText: 'Cancelar',
       onConfirm: () async {
         final auth = context.read<AuthProvider>();
-        final pedidos = context.read<PedidosProvider>();
-        await pedidos.concluirItem(item.id, auth.user?.id ?? '');
+        final pedidosProvider = context.read<PedidosProvider>();
+
+        await pedidosProvider.concluirPedido(pedido, auth.user?.id ?? '');
+
         if (!mounted) return;
+
         CustomAlert.show(
           context,
-          title: 'Item retirado',
-          message: 'Esse item foi movido para histórico!',
+          title: 'Pedido retirado',
+          message: 'O pedido foi movido para o histórico.',
           confirmText: 'OK',
           onConfirm: () {
-            _carregarDados();
             Navigator.of(context).pushNamed('/historico');
           },
         );
@@ -64,12 +99,27 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Map<String, List<OrderItemModel>> _agruparPedidos(
+    List<OrderItemModel> itens,
+  ) {
+    final grupos = <String, List<OrderItemModel>>{};
+
+    for (final item in itens) {
+      final chave = item.backendUid ?? item.orderId;
+      grupos.putIfAbsent(chave, () => []);
+      grupos[chave]!.add(item);
+    }
+
+    return grupos;
+  }
+
   @override
   Widget build(BuildContext context) {
     final storage = context.watch<StorageProvider>();
-    final pedidos = context.watch<PedidosProvider>();
+    final pedidosProvider = context.watch<PedidosProvider>();
     final auth = context.watch<AuthProvider>();
-    final itens = pedidos.pedidos;
+
+    final grupos = _agruparPedidos(pedidosProvider.pedidos);
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -93,7 +143,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          Expanded(child: _buildBody(itens)),
+          Expanded(child: _buildBody(grupos.values.toList())),
         ],
       ),
     );
@@ -129,18 +179,20 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _headerBtn(IconData icon, VoidCallback onTap) => GestureDetector(
-    onTap: onTap,
-    child: Container(
-      width: 36,
-      height: 36,
-      decoration: BoxDecoration(
-        color: Colors.white24,
-        borderRadius: BorderRadius.circular(10),
+  Widget _headerBtn(IconData icon, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          color: Colors.white24,
+          borderRadius: BorderRadius.circular(10),
+        ),
+        child: Icon(icon, color: Colors.white, size: 20),
       ),
-      child: Icon(icon, color: Colors.white, size: 20),
-    ),
-  );
+    );
+  }
 
   Widget _buildCardCredito(double credito) {
     return Container(
@@ -193,7 +245,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBody(List<OrderItemModel> itens) {
+  Widget _buildBody(List<List<OrderItemModel>> pedidos) {
     if (_loading) {
       return const Center(
         child: Column(
@@ -209,7 +261,8 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
-    if (itens.isEmpty) {
+
+    if (pedidos.isEmpty) {
       return Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
@@ -233,137 +286,251 @@ class _HomeScreenState extends State<HomeScreen> {
         ),
       );
     }
+
     return RefreshIndicator(
       color: AppColors.bluePrimary,
       onRefresh: () => _carregarDados(refresh: true),
       child: ListView.builder(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-        itemCount: itens.length,
-        itemBuilder: (_, i) => _buildCard(itens[i]),
+        itemCount: pedidos.length,
+        itemBuilder: (_, i) {
+          return _buildCard(pedidos[i]);
+        },
       ),
     );
   }
 
-  Widget _buildCard(OrderItemModel item) {
-    return GestureDetector(
-      onTap: () => Navigator.of(context).pushNamed(
-        '/qr-code',
-        arguments: {
-          'pedidoId': item.orderId,
-          'usuario': item.product?.name ?? 'Produto',
-          'valorTotal': item.total,
-          'produtos': ['${item.quantity}x ${item.product?.name ?? 'Produto'}'],
-        },
+  Widget _buildCard(List<OrderItemModel> itens) {
+    final item = itens.first;
+
+    final total = itens.fold<double>(0.0, (sum, item) => sum + item.total);
+
+    final saldo = item.saldoPagamento;
+    final pagamentoConcluido = item.pagamentoConcluido;
+
+    final produtos = itens
+        .map((item) => '${item.quantity}x ${item.product?.name ?? 'Produto'}')
+        .join('\n');
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
       ),
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 10),
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: AppColors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.cardBorder),
-        ),
-        child: Row(
-          children: [
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Container(
+                width: 46,
+                height: 46,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  color: AppColors.badgeBg,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.receipt_long_outlined,
+                  color: AppColors.bluePrimary,
+                  size: 24,
+                ),
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Pedido',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textEmpty,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      produtos,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      item.order?.location?.name ?? 'N/A',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: AppColors.textSection,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.badgeBg,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  'Total: R\$ ${total.toStringAsFixed(2)}',
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.bluePrimary,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              if (pagamentoConcluido)
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.check_circle,
+                      color: AppColors.greenSuccess,
+                      size: 17,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Pagamento confirmado',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.greenSuccess,
+                      ),
+                    ),
+                  ],
+                )
+              else
+                const Row(
+                  children: [
+                    Icon(
+                      Icons.warning_amber_rounded,
+                      color: Colors.red,
+                      size: 17,
+                    ),
+                    SizedBox(width: 5),
+                    Text(
+                      'Pagamento pendente',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
+                      ),
+                    ),
+                  ],
+                ),
+            ],
+          ),
+          if (!pagamentoConcluido && saldo > 0.01) ...[
+            const SizedBox(height: 10),
             Container(
-              width: 46,
-              height: 46,
-              margin: const EdgeInsets.only(right: 12),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: AppColors.badgeBg,
-                borderRadius: BorderRadius.circular(12),
+                color: Colors.red.withOpacity(0.07),
+                borderRadius: BorderRadius.circular(10),
               ),
-              child: const Icon(
-                Icons.fastfood_outlined,
-                color: AppColors.bluePrimary,
-                size: 24,
-              ),
-            ),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Row(
                 children: [
-                  Text(
-                    item.product?.name ?? 'Produto',
-                    style: const TextStyle(
-                      fontSize: 15,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.textPrimary,
-                    ),
+                  const Icon(
+                    Icons.account_balance_wallet_outlined,
+                    color: Colors.red,
+                    size: 18,
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    item.order?.location?.name ?? 'N/A',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSection,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 3,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.badgeBg,
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Text(
-                          'Qtd: ${item.quantity}',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.bluePrimary,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        'R\$ ${item.total.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.bluePrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (item.observations != null &&
-                      item.observations!.isNotEmpty)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4),
-                      child: Text(
-                        'Obs: ${item.observations}',
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: AppColors.textEmpty,
-                          fontStyle: FontStyle.italic,
-                        ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Falta pagar R\$ ${saldo.toStringAsFixed(2)}.',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.red,
                       ),
                     ),
+                  ),
                 ],
               ),
             ),
-            GestureDetector(
-              onTap: () => _confirmarRetirada(item),
-              child: const Icon(
-                Icons.check_circle,
-                color: AppColors.greenSuccess,
-                size: 32,
+          ],
+          const SizedBox(height: 12),
+          SizedBox(
+            height: 46,
+            child: ElevatedButton.icon(
+              onPressed: pagamentoConcluido
+                  ? () => _confirmarRetirada(itens)
+                  : null,
+              icon: Icon(
+                pagamentoConcluido
+                    ? Icons.check_circle_outline
+                    : Icons.lock_outline,
+              ),
+              label: Text(
+                pagamentoConcluido
+                    ? 'CONFIRMAR RETIRADA'
+                    : 'PAGAMENTO PENDENTE',
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.greenSuccess,
+                foregroundColor: Colors.white,
+                disabledBackgroundColor: Colors.red.withOpacity(0.08),
+                disabledForegroundColor: Colors.red,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+                textStyle: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ),
+          if (!pagamentoConcluido && saldo > 0.01) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton.icon(
+                onPressed: () => _continuarPagamento(item),
+                icon: const Icon(Icons.payment_outlined),
+                label: Text('PAGAR SALDO R\$ ${saldo.toStringAsFixed(2)}'),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.bluePrimary,
+                  side: const BorderSide(
+                    color: AppColors.bluePrimary,
+                    width: 1.5,
+                  ),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  textStyle: const TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ),
             ),
           ],
-        ),
+        ],
       ),
     );
   }
 
-  Widget _circle(double size, Color color) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-  );
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
 }

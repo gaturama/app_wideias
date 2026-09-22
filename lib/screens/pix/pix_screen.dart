@@ -2,6 +2,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:provider/provider.dart';
+import '../../core/services/order_service.dart';
+import '../../providers/auth_provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/services/payment_service.dart';
 import '../../widgets/custom_alert.dart';
@@ -17,6 +20,9 @@ class _PixScreenState extends State<PixScreen> {
   double _valorTotal = 0;
   String _pixCode = '';
   String? _saleCode;
+  String? _pedidoUid;
+
+  Map<String, dynamic>? _pagamentoConfirmado;
 
   bool _copiado = false;
   bool _pago = false;
@@ -31,6 +37,7 @@ class _PixScreenState extends State<PixScreen> {
   String? _erro;
 
   final PaymentService _paymentService = PaymentService();
+  final OrderService _orderService = OrderService();
 
   Timer? _pollTimer;
 
@@ -53,6 +60,19 @@ class _PixScreenState extends State<PixScreen> {
       }
 
       _valorTotal = (args['valorTotal'] as num?)?.toDouble() ?? 0.0;
+
+      _pedidoUid = args['pedidoUid']?.toString();
+
+      if (_pedidoUid == null || _pedidoUid!.isEmpty) {
+        if (!mounted) return;
+
+        setState(() {
+          _carregando = false;
+          _erro = 'Não foi possível identificar o pedido.';
+        });
+
+        return;
+      }
 
       if (_valorTotal <= 0) {
         if (!mounted) return;
@@ -196,6 +216,23 @@ class _PixScreenState extends State<PixScreen> {
             return;
           }
 
+          _pagamentoConfirmado = pagamento;
+
+          try {
+            await _registrarPagamentoBackend(pagamento);
+          } catch (e) {
+            debugPrint('ERRO AO REGISTRAR PAGAMENTO: $e');
+
+            if (!mounted) return;
+
+            setState(() {
+              _erro =
+                  'O PIX foi confirmado, mas houve um erro ao registrar o pagamento no pedido.';
+            });
+
+            return;
+          }
+
           if (!mounted) return;
 
           setState(() {
@@ -248,6 +285,65 @@ class _PixScreenState extends State<PixScreen> {
         }
       }
     });
+  }
+
+  Future<void> _registrarPagamentoBackend(
+    Map<String, dynamic> pagamento,
+  ) async {
+    final user = context.read<AuthProvider>().user;
+    final pedidoUid = _pedidoUid;
+
+    if (user == null) {
+      throw Exception('Usuário não autenticado.');
+    }
+
+    if (user.token.isEmpty) {
+      throw Exception('Token do cliente não encontrado.');
+    }
+
+    if (user.uid.isEmpty) {
+      throw Exception('UID do cliente não encontrado.');
+    }
+
+    if (pedidoUid == null || pedidoUid.isEmpty) {
+      throw Exception('UID do pedido não encontrado.');
+    }
+
+    final transactionCode = pagamento['chargeId']?.toString() ?? '';
+    final transactionID = pagamento['orderId']?.toString() ?? '';
+    final endToEndId = pagamento['endToEndId']?.toString() ?? '';
+
+    if (transactionCode.isEmpty) {
+      throw Exception('Código da transação PIX não encontrado.');
+    }
+
+    if (transactionID.isEmpty) {
+      throw Exception('ID da transação PIX não encontrado.');
+    }
+
+    debugPrint('=== PAGAMENTO WIDEIAS ===');
+    debugPrint('Pedido: $pedidoUid');
+    debugPrint('Transaction Code: $transactionCode');
+    debugPrint('Transaction ID: $transactionID');
+    debugPrint('EndToEnd ID disponível: ${endToEndId.isNotEmpty}');
+    debugPrint('Tipo: 4');
+    debugPrint('Status: 1');
+    debugPrint('Valor: $_valorTotal');
+
+    await _orderService.registrarPagamentoPedido(
+      appClienteToken: user.token,
+      appClienteUid: user.uid,
+      pedidoUid: pedidoUid,
+      transactionCode: transactionCode,
+      transactionID: transactionID,
+      nsu: endToEndId,
+      bin: '',
+      autoCode: '',
+      cardBrand: '',
+      idTipoPagamento: '4',
+      status: '1',
+      valor: _valorTotal,
+    );
   }
 
   String _tratarErro(Object erro) {
@@ -406,9 +502,44 @@ class _PixScreenState extends State<PixScreen> {
                     ),
                     const SizedBox(height: 16),
                     TextButton.icon(
-                      onPressed: _criarPix,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('Gerar novo PIX'),
+                      onPressed: _pagamentoConfirmado != null
+                          ? () async {
+                              try {
+                                await _registrarPagamentoBackend(
+                                  _pagamentoConfirmado!,
+                                );
+
+                                if (!mounted) return;
+
+                                setState(() {
+                                  _erro = null;
+                                  _pago = true;
+                                });
+
+                                await Future.delayed(
+                                  const Duration(milliseconds: 900),
+                                );
+
+                                if (!mounted) return;
+
+                                Navigator.of(context).pop(true);
+                              } catch (e) {
+                                debugPrint(
+                                  'ERRO AO TENTAR REGISTRAR NOVAMENTE: $e',
+                                );
+                              }
+                            }
+                          : _criarPix,
+                      icon: Icon(
+                        _pagamentoConfirmado != null
+                            ? Icons.sync
+                            : Icons.refresh,
+                      ),
+                      label: Text(
+                        _pagamentoConfirmado != null
+                            ? 'Tentar registrar pagamento novamente'
+                            : 'Gerar novo PIX',
+                      ),
                     ),
                   ],
                 ),

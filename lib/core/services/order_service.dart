@@ -21,7 +21,6 @@ class OrderService {
     required List<CartItemModel> cart,
     String? observacao,
   }) async {
-
     final basicEncoded = base64Encode(
       utf8.encode('$_basicUser:$_basicPassword'),
     );
@@ -32,7 +31,6 @@ class OrderService {
       if (idProduto == null || idProduto <= 0) {
         throw Exception('ID inválido para o produto "${item.name}".');
       }
-    
 
       return {
         'idProduto': idProduto,
@@ -47,9 +45,7 @@ class OrderService {
         'cliente': appClienteUid,
         'valorTotal': valorTotal,
         'idEvento': idEvento,
-        'obs': observacao?.trim().isEmpty == true
-            ? null
-            : observacao?.trim(),
+        'obs': observacao?.trim().isEmpty == true ? null : observacao?.trim(),
         'itens': itens,
       },
     };
@@ -153,5 +149,96 @@ class OrderService {
     }
 
     return jsonDecode(response.body);
+  }
+
+  Future<Map<String, dynamic>> registrarPagamentoPedido({
+    required String appClienteToken,
+    required String appClienteUid,
+    required String pedidoUid,
+    required String transactionCode,
+    required String transactionID,
+    required String nsu,
+    required String bin,
+    required String autoCode,
+    required String cardBrand,
+    required String idTipoPagamento,
+    required String status,
+    required double valor,
+  }) async {
+    if (_basicUser.isEmpty || _basicPassword.isEmpty) {
+      throw Exception('Basic Auth não configurado.');
+    }
+
+    if (appClienteToken.isEmpty) {
+      throw Exception('Token do cliente não encontrado.');
+    }
+
+    if (appClienteUid.isEmpty) {
+      throw Exception('UID do cliente não encontrado.');
+    }
+
+    if (pedidoUid.isEmpty) {
+      throw Exception('UID do pedido não encontrado.');
+    }
+
+    final basicEncoded = base64Encode(
+      utf8.encode('$_basicUser:$_basicPassword'),
+    );
+
+    final body = {
+      'pedido': pedidoUid,
+      'pagamento': {
+        'transactionCode': transactionCode,
+        'transactionID': transactionID,
+        'nsu': nsu,
+        'bin': bin,
+        'autoCode': autoCode,
+        'cardBrand': cardBrand,
+        'idTipoPagamento': idTipoPagamento,
+        'status': status,
+        'valor': valor,
+      },
+    };
+
+    debugPrint('=== REGISTRAR PAGAMENTO PEDIDO ===');
+    debugPrint('Pedido UID: $pedidoUid');
+    debugPrint('Tipo pagamento: $idTipoPagamento');
+    debugPrint('Status: $status');
+    debugPrint('Valor: $valor');
+
+    final response = await http.post(
+      Uri.parse('$_baseUrl/pedidos/pagamento'),
+      headers: {
+        'Accept': 'application/json',
+        'Content-Type': 'application/json',
+        'Authorization': 'Basic $basicEncoded',
+        'AppClienteToken': appClienteToken,
+        'AppClienteUID': appClienteUid,
+      },
+      body: jsonEncode(body),
+    );
+
+    debugPrint('HTTP PAGAMENTO PEDIDO: ${response.statusCode}');
+    debugPrint('BODY PAGAMENTO PEDIDO: ${response.body}');
+
+    dynamic decoded;
+
+    if (response.body.trim().isNotEmpty) {
+      decoded = jsonDecode(response.body);
+    }
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      throw Exception(
+        decoded is Map && decoded['erro'] != null
+            ? decoded['erro'].toString()
+            : 'Erro ao registrar pagamento do pedido.',
+      );
+    }
+
+    if (decoded is Map) {
+      return Map<String, dynamic>.from(decoded);
+    }
+
+    return {};
   }
 }

@@ -6,11 +6,13 @@ class StorageProvider extends ChangeNotifier {
   String? _locationName;
   String _tipoLocal = 'evento';
   double _credito = 0.0;
+  String? _pedidoPendenteUid;
 
   String? get locationId => _locationId;
   String? get locationName => _locationName;
   String get tipoLocal => _tipoLocal;
   double get credito => _credito;
+  String? get pedidoPendenteUid => _pedidoPendenteUid;
 
   Future<void> carregar() async {
     final prefs = await SharedPreferences.getInstance();
@@ -18,6 +20,7 @@ class StorageProvider extends ChangeNotifier {
     _locationName = prefs.getString('location_name');
     _tipoLocal = prefs.getString('tipo_local') ?? 'evento';
     _credito = prefs.getDouble('credito') ?? 0.0;
+    _pedidoPendenteUid = prefs.getString('pedido_pendente_uid');
     notifyListeners();
   }
 
@@ -39,14 +42,32 @@ class StorageProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  Future<void> setPedidoPendenteUid(String uid) async {
+    _pedidoPendenteUid = uid;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('pedido_pendente_uid', uid);
+    notifyListeners();
+  }
+
+  Future<void> limparPedidoPendenteUid() async {
+    _pedidoPendenteUid = null;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('pedido_pendente_uid');
+    notifyListeners();
+  }
+
   Future<void> limpar() async {
     _locationId = null;
     _locationName = null;
     _tipoLocal = 'evento';
+    _pedidoPendenteUid = null;
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('location_id');
     await prefs.remove('location_name');
     await prefs.remove('tipo_local');
+    await prefs.remove('pedido_pendente_uid');
+
     notifyListeners();
   }
 }

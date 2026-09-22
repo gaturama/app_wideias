@@ -18,14 +18,22 @@ class PagamentoScreen extends StatefulWidget {
 
 class _PagamentoScreenState extends State<PagamentoScreen> {
   List<CartItemModel> _cart = [];
+
   String? _locationId;
+  String? _locationName;
   String? _observacoes;
   String? _mesa;
   int? _idEvento;
+
   bool _usarCredito = false;
   bool _loading = false;
+  bool _modoPagamentoExistente = false;
+
+  String? _pedidoExistenteUid;
+  double _saldoPagamento = 0.0;
 
   final GooglePayService _googlePayService = GooglePayService();
+
   final OrderService _orderService = OrderService();
 
   Map<String, dynamic>? _pedidoBackend;
@@ -39,36 +47,94 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   @override
   void initState() {
     super.initState();
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map?;
+
       if (args == null) return;
+
+      final pedidoUid = args['pedidoUid']?.toString();
+
+      final saldo = double.tryParse(args['saldoPagamento']?.toString() ?? '');
 
       setState(() {
         _cart = List<CartItemModel>.from(args['cart'] ?? []);
+
         _locationId = args['locationId']?.toString();
+
+        _locationName = args['locationName']?.toString();
+
         _observacoes = args['observacoes']?.toString();
+
         _mesa = args['mesa']?.toString();
+
         _idEvento = int.tryParse(args['idEvento']?.toString() ?? '');
+
+        if (pedidoUid != null && pedidoUid.isNotEmpty) {
+          _modoPagamentoExistente = true;
+          _pedidoExistenteUid = pedidoUid;
+          _saldoPagamento = saldo ?? 0.0;
+
+          _pedidoBackend = {
+            'uid': pedidoUid,
+            'SaldoPagamentoPedido': _saldoPagamento,
+            'Status': 0,
+          };
+        }
       });
 
       debugPrint('=== DADOS PAGAMENTO ===');
       debugPrint('Location ID: $_locationId');
       debugPrint('ID Evento: $_idEvento');
-      debugPrint('Itens: ${_cart.length}');
+      debugPrint('Modo pedido existente: $_modoPagamentoExistente');
+      debugPrint(
+        'UID pedido presente: '
+        '${_pedidoExistenteUid != null}',
+      );
     });
   }
 
-  double get _totalCarrinho => _cart.fold(0.0, (s, i) => s + i.precoTotal);
-  double get _credito => context.read<StorageProvider>().credito;
-  double get _creditoAplicado =>_usarCredito ? _credito.clamp(0, _totalCarrinho) : 0;
-  double get _totalFinal => _totalCarrinho - _creditoAplicado;
+  double get _totalCarrinho {
+    return _cart.fold(0.0, (sum, item) => sum + item.precoTotal);
+  }
+
+  double get _credito {
+    return context.read<StorageProvider>().credito;
+  }
+
+  double get _creditoAplicado {
+    return _usarCredito ? _credito.clamp(0, _totalCarrinho) : 0;
+  }
+
+  double get _totalFinal {
+    return _totalCarrinho - _creditoAplicado;
+  }
+
+  double get _valorPagamentoTeste {
+    if (_modoPagamentoExistente) {
+      return _saldoPagamento;
+    }
+
+    if (_totalFinal <= 20) {
+      return _totalFinal;
+    }
+
+    return 20.0;
+  }
 
   Future<void> _handleMetodo(String key) async {
-    if (_cart.isEmpty) {
+    if (!_modoPagamentoExistente && _cart.isEmpty) {
       CustomAlert.show(
         context,
         title: 'Carrinho vazio',
         message: 'Adicione produtos antes de continuar.',
+      );
+      return;
+    }
+
+    if (_modoPagamentoExistente && _saldoPagamento <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Este pedido já está totalmente pago.')),
       );
       return;
     }
@@ -85,11 +151,22 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
         setState(() => _loading = true);
 
         final pedido = await _garantirPedidoCriado();
+
         final pedidoUid = pedido['uid']?.toString();
 
         if (pedidoUid == null || pedidoUid.isEmpty) {
           throw Exception('UID do pedido não encontrado.');
         }
+
+        final valorPagamento = _valorPagamentoTeste;
+
+        debugPrint('=== VALOR PARA PAGAMENTO ===');
+        debugPrint('Valor do carrinho: $_totalCarrinho');
+        debugPrint('Valor restante: $_saldoPagamento');
+        debugPrint(
+          'Valor enviado para PIX: '
+          '$valorPagamento',
+        );
 
         if (!mounted) return;
 
@@ -97,13 +174,91 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
         final pago = await Navigator.of(context).pushNamed(
           '/pix',
-          arguments: {'valorTotal': _totalFinal, 'pedidoUid': pedidoUid},
+          arguments: {'valorTotal': valorPagamento, 'pedidoUid': pedidoUid},
         );
 
         if (!mounted) return;
 
         if (pago == true) {
-          await _finalizarPagamento('PIX');
+          setState(() => _loading = true);
+
+          final pedidoAtualizado = await _consultarPedidoBackend();
+
+          if (!mounted) return;
+
+          if (pedidoAtualizado == null) {
+            setState(() => _loading = false);
+
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  'Pagamento confirmado, mas não foi possível consultar o pedido.',
+                ),
+              ),
+            );
+
+            return;
+          }
+
+          final saldo =
+              double.tryParse(
+                pedidoAtualizado['SaldoPagamentoPedido']?.toString() ?? '',
+              ) ??
+              0.0;
+
+          final status =
+              int.tryParse(pedidoAtualizado['Status']?.toString() ?? '') ?? 0;
+
+          final uid = pedidoAtualizado['UID']?.toString() ?? pedidoUid;
+
+          debugPrint('=== RESULTADO PAGAMENTO ===');
+          debugPrint('Status: $status');
+          debugPrint('Saldo restante: $saldo');
+
+          final auth = context.read<AuthProvider>();
+
+          final pedidosProvider = context.read<PedidosProvider>();
+
+          await pedidosProvider.adicionarPedidos(
+            userId: auth.user?.id ?? '',
+            cart: _cart,
+            metodo: 'PIX',
+            locationId: _locationId ?? '',
+            locationName:
+                _locationName ??
+                context.read<StorageProvider>().locationName ??
+                '',
+            mesa: _mesa,
+            backendUid: uid,
+            saldoPagamento: saldo,
+            statusPagamento: status,
+          );
+
+          if (saldo > 0.01) {
+            await _manterPedidoPendente(uid);
+
+            if (!mounted) return;
+
+            setState(() => _loading = false);
+
+            CustomAlert.show(
+              context,
+              title: 'Pagamento parcial',
+              message:
+                  'Pagamento confirmado!\n\n'
+                  'Ainda faltam '
+                  'R\$ ${saldo.toStringAsFixed(2)} '
+                  'para liberar a retirada.',
+              confirmText: 'OK',
+              onConfirm: () => Navigator.of(
+                context,
+              ).pushNamedAndRemoveUntil('/home', (route) => false),
+            );
+
+            return;
+          }
+
+          await _finalizarPagamentoPIX(uid, saldo, status);
         }
 
         return;
@@ -163,12 +318,13 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
   Future<Map<String, dynamic>> _garantirPedidoCriado() async {
     if (_pedidoBackend != null) {
-      debugPrint('Pedido já criado. Reutilizando pedido existente.');
-
+      debugPrint('=== PEDIDO JÁ DISPONÍVEL ===');
+      debugPrint('UID presente: ${_pedidoBackend!['uid'] != null}');
       return _pedidoBackend!;
     }
 
     final user = context.read<AuthProvider>().user;
+    final storage = context.read<StorageProvider>();
 
     if (user == null) {
       throw Exception('Usuário não autenticado.');
@@ -180,6 +336,26 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
     if (user.uid.isEmpty) {
       throw Exception('UID do usuário não encontrado.');
+    }
+
+    if (_modoPagamentoExistente) {
+      final pedidoUid = _pedidoExistenteUid;
+
+      if (pedidoUid == null || pedidoUid.isEmpty) {
+        throw Exception('UID do pedido não encontrado.');
+      }
+
+      debugPrint('=== CONTINUANDO PEDIDO EXISTENTE ===');
+      debugPrint('UID do pedido presente: ${pedidoUid.isNotEmpty}');
+      debugPrint('Saldo atual: $_saldoPagamento');
+
+      _pedidoBackend = {
+        'uid': pedidoUid,
+        'SaldoPagamentoPedido': _saldoPagamento,
+        'Status': 0,
+      };
+
+      return _pedidoBackend!;
     }
 
     if (_cart.isEmpty) {
@@ -208,12 +384,13 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       }
     }
 
-    debugPrint('=== CRIANDO PEDIDO ===');
+    debugPrint('=== NOVO PEDIDO ===');
     debugPrint('Cliente UID disponível: ${user.uid.isNotEmpty}');
     debugPrint('Token disponível: ${user.token.isNotEmpty}');
     debugPrint('ID Evento: $idEvento');
     debugPrint('Valor total: $_totalCarrinho');
     debugPrint('Quantidade de itens: ${_cart.length}');
+    debugPrint('Não reutilizando pedido pendente salvo.');
 
     final response = await _orderService.criarPedido(
       appClienteToken: user.token,
@@ -230,28 +407,120 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       throw Exception('Backend não retornou o UID do pedido.');
     }
 
+    await storage.setPedidoPendenteUid(pedidoUid);
+
     _pedidoBackend = response;
 
     debugPrint('=== PEDIDO CRIADO ===');
     debugPrint('UID presente: ${pedidoUid.isNotEmpty}');
+    debugPrint('UID salvo para este pedido.');
 
     return response;
   }
 
-  Future<void> _finalizarPagamento(String metodo) async {
-    if (_cart.isEmpty) {
-      CustomAlert.show(
+  Future<Map<String, dynamic>?> _consultarPedidoBackend() async {
+    final user = context.read<AuthProvider>().user;
+
+    if (user == null) {
+      throw Exception('Usuário não autenticado.');
+    }
+
+    final storage = context.read<StorageProvider>();
+
+    final pedidoUid =
+        _pedidoBackend?['uid']?.toString() ??
+        _pedidoExistenteUid ??
+        storage.pedidoPendenteUid;
+
+    if (pedidoUid == null || pedidoUid.isEmpty) {
+      return null;
+    }
+
+    final pedidos = await _orderService.getPedidos(
+      appClienteToken: user.token,
+      appClienteUid: user.uid,
+    );
+
+    if (pedidos is! Map || pedidos['pedidos'] is! List) {
+      return null;
+    }
+
+    final lista = pedidos['pedidos'] as List;
+
+    for (final item in lista) {
+      if (item is! Map) continue;
+
+      final uid = item['UID']?.toString();
+
+      if (uid != pedidoUid) {
+        continue;
+      }
+
+      return Map<String, dynamic>.from(item);
+    }
+
+    return null;
+  }
+
+  Future<void> _manterPedidoPendente(String uid) async {
+    final storage = context.read<StorageProvider>();
+
+    await storage.setPedidoPendenteUid(uid);
+  }
+
+  Future<void> _finalizarPagamentoPIX(
+    String uid,
+    double saldo,
+    int status,
+  ) async {
+    final auth = context.read<AuthProvider>();
+
+    final storage = context.read<StorageProvider>();
+
+    final pedidosProvider = context.read<PedidosProvider>();
+
+    await pedidosProvider.adicionarPedidos(
+      userId: auth.user?.id ?? '',
+      cart: _cart,
+      metodo: 'PIX',
+      locationId: _locationId ?? '',
+      locationName: _locationName ?? storage.locationName ?? '',
+      mesa: _mesa,
+      backendUid: uid,
+      saldoPagamento: saldo,
+      statusPagamento: status,
+    );
+
+    await storage.limparPedidoPendenteUid();
+
+    if (!mounted) return;
+
+    setState(() => _loading = false);
+
+    CustomAlert.show(
+      context,
+      title: 'Pagamento confirmado!',
+      message:
+          'O pedido foi totalmente pago.\n\n'
+          'A retirada já está liberada.',
+      confirmText: 'OK',
+      onConfirm: () => Navigator.of(
         context,
-        title: 'Carrinho vazio',
-        message: 'Adicione produtos antes de finalizar',
-      );
+      ).pushNamedAndRemoveUntil('/home', (route) => false),
+    );
+  }
+
+  Future<void> _finalizarPagamento(String metodo) async {
+    if (_cart.isEmpty && !_modoPagamentoExistente) {
       return;
     }
 
     setState(() => _loading = true);
 
     final storage = context.read<StorageProvider>();
+
     final auth = context.read<AuthProvider>();
+
     final pedidos = context.read<PedidosProvider>();
 
     if (_creditoAplicado > 0) {
@@ -263,9 +532,14 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       cart: _cart,
       metodo: metodo,
       locationId: _locationId ?? '',
-      locationName: storage.locationName ?? '',
+      locationName: _locationName ?? storage.locationName ?? '',
       mesa: _mesa,
+      backendUid: _pedidoBackend?['uid']?.toString(),
+      saldoPagamento: 0.0,
+      statusPagamento: 1,
     );
+
+    await storage.limparPedidoPendenteUid();
 
     if (!mounted) return;
 
@@ -273,12 +547,12 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
     CustomAlert.show(
       context,
-      title: 'Pedido confirmado!',
-      message:
-          'Total: R\$ ${_totalCarrinho.toStringAsFixed(2)}\nPagamento: $metodo',
+      title: 'Pagamento confirmado!',
+      message: 'Pedido totalmente pago.',
       confirmText: 'OK',
-      onConfirm: () =>
-          Navigator.of(context).pushNamedAndRemoveUntil('/home', (r) => false),
+      onConfirm: () => Navigator.of(
+        context,
+      ).pushNamedAndRemoveUntil('/home', (route) => false),
     );
   }
 
@@ -298,40 +572,42 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
                   _buildTotalCard(),
-                  const SizedBox(height: 16),
-                  _buildCreditoToggle(credito),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    height: 52,
-                    child: OutlinedButton.icon(
-                      onPressed: () => Navigator.of(context).pushNamed(
-                        '/dividir-conta',
-                        arguments: {
-                          'pedidoId': _locationId ?? '',
-                          'valorTotal': _totalFinal,
-                        },
-                      ),
-                      icon: const Icon(Icons.people_outline),
-                      label: const Text(
-                        'Dividir conta',
-                        style: TextStyle(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
+                  if (!_modoPagamentoExistente) ...[
+                    const SizedBox(height: 16),
+                    _buildCreditoToggle(credito),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: OutlinedButton.icon(
+                        onPressed: () => Navigator.of(context).pushNamed(
+                          '/dividir-conta',
+                          arguments: {
+                            'pedidoId': _locationId ?? '',
+                            'valorTotal': _totalFinal,
+                          },
                         ),
-                      ),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.bluePrimary,
-                        side: const BorderSide(
-                          color: AppColors.bluePrimary,
-                          width: 1.5,
+                        icon: const Icon(Icons.people_outline),
+                        label: const Text(
+                          'Dividir conta',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.bluePrimary,
+                          side: const BorderSide(
+                            color: AppColors.bluePrimary,
+                            width: 1.5,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
                         ),
                       ),
                     ),
-                  ),
+                  ],
                   const SizedBox(height: 24),
                   const Text(
                     'FORMA DE PAGAMENTO',
@@ -379,46 +655,46 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     return Container(
       color: AppColors.bluePrimary,
       padding: const EdgeInsets.fromLTRB(20, 52, 20, 20),
-      child: Stack(
+      child: Row(
         children: [
-          Row(
-            children: [
-              GestureDetector(
-                onTap: () => Navigator.of(context).pop(),
-                child: Container(
-                  width: 36,
-                  height: 36,
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: const Icon(
-                    Icons.arrow_back,
-                    color: Colors.white,
-                    size: 20,
-                  ),
-                ),
+          GestureDetector(
+            onTap: () => Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil('/home', (route) => false),
+            child: Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: Colors.white24,
+                borderRadius: BorderRadius.circular(10),
               ),
-              const Expanded(
-                child: Text(
-                  'Pagamento',
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+              child: const Icon(
+                Icons.arrow_back,
+                color: Colors.white,
+                size: 20,
               ),
-              const SizedBox(width: 36),
-            ],
+            ),
           ),
+          const Expanded(
+            child: Text(
+              'Pagamento',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ),
+          const SizedBox(width: 36),
         ],
       ),
     );
   }
 
   Widget _buildTotalCard() {
+    final valor = _valorPagamentoTeste;
+
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
@@ -443,7 +719,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
             width: double.infinity,
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 const Icon(
                   Icons.credit_card_outlined,
@@ -451,25 +726,24 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   size: 68,
                 ),
                 const SizedBox(height: 8),
-                const Text(
-                  'Total a pagar',
-                  style: TextStyle(color: Colors.white, fontSize: 16),
-                  textAlign: TextAlign.center,
+                Text(
+                  _modoPagamentoExistente
+                      ? 'Saldo restante'
+                      : 'Valor a pagar agora',
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                 ),
                 Text(
-                  'R\$ ${_totalFinal.toStringAsFixed(2)}',
+                  'R\$ ${valor.toStringAsFixed(2)}',
                   style: const TextStyle(
                     color: Colors.white,
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                   ),
-                  textAlign: TextAlign.center,
                 ),
-                if (_creditoAplicado > 0)
+                if (_modoPagamentoExistente)
                   Text(
-                    'Carrinho: R\$ ${_totalCarrinho.toStringAsFixed(2)} · Crédito: −R\$ ${_creditoAplicado.toStringAsFixed(2)}',
+                    'Saldo atual do pedido',
                     style: const TextStyle(color: Colors.white70, fontSize: 12),
-                    textAlign: TextAlign.center,
                   ),
               ],
             ),
@@ -584,9 +858,11 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     );
   }
 
-  Widget _circle(double size, Color color) => Container(
-    width: size,
-    height: size,
-    decoration: BoxDecoration(color: color, shape: BoxShape.circle),
-  );
+  Widget _circle(double size, Color color) {
+    return Container(
+      width: size,
+      height: size,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+    );
+  }
 }

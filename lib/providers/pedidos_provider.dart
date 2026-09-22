@@ -1,6 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
 import '../models/order_item_model.dart';
 import '../models/historico_item_model.dart';
 import '../models/cart_item_model.dart';
@@ -21,6 +21,7 @@ class PedidosProvider extends ChangeNotifier {
     if (pedidosJson != null) {
       try {
         final list = jsonDecode(pedidosJson) as List;
+
         _pedidos = list
             .map((e) => OrderItemModel.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -33,6 +34,7 @@ class PedidosProvider extends ChangeNotifier {
     if (historicoJson != null) {
       try {
         final list = jsonDecode(historicoJson) as List;
+
         _historico = list
             .map((e) => HistoricoItemModel.fromJson(e as Map<String, dynamic>))
             .toList();
@@ -52,8 +54,32 @@ class PedidosProvider extends ChangeNotifier {
     required String locationId,
     required String locationName,
     String? mesa,
+    String? backendUid,
+    double saldoPagamento = 0.0,
+    int statusPagamento = 1,
   }) async {
-    final orderId = 'order-${DateTime.now().millisecondsSinceEpoch}';
+    if (backendUid != null && backendUid.isNotEmpty) {
+      final existe = _pedidos.any((e) => e.backendUid == backendUid);
+
+      if (existe) {
+        for (int i = 0; i < _pedidos.length; i++) {
+          if (_pedidos[i].backendUid == backendUid) {
+            _pedidos[i] = _pedidos[i].copyWith(
+              saldoPagamento: saldoPagamento,
+              statusPagamento: statusPagamento,
+            );
+          }
+        }
+
+        await _salvarPedidosCompleto(userId);
+        notifyListeners();
+        return;
+      }
+    }
+
+    final orderId = backendUid?.isNotEmpty == true
+        ? backendUid!
+        : 'order-${DateTime.now().millisecondsSinceEpoch}';
 
     final novos = cart
         .map(
@@ -64,6 +90,9 @@ class PedidosProvider extends ChangeNotifier {
             quantity: item.qty,
             price: item.precoUnitario,
             observations: item.observacao,
+            backendUid: backendUid,
+            saldoPagamento: saldoPagamento,
+            statusPagamento: statusPagamento,
             product: ProductInfo(
               id: item.id,
               name: item.name,
@@ -84,86 +113,59 @@ class PedidosProvider extends ChangeNotifier {
         .toList();
 
     _pedidos.addAll(novos);
+
     await _salvarPedidosCompleto(userId);
     notifyListeners();
   }
 
-  Future<void> _salvarPedidosCompleto(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'pedidos_$userId',
-      jsonEncode(_pedidos.map((e) => _orderItemToJson(e)).toList()),
-    );
+  Future<void> atualizarStatusPagamento({
+    required String userId,
+    required String backendUid,
+    required double saldoPagamento,
+    required int statusPagamento,
+  }) async {
+    for (int i = 0; i < _pedidos.length; i++) {
+      if (_pedidos[i].backendUid == backendUid) {
+        _pedidos[i] = _pedidos[i].copyWith(
+          saldoPagamento: saldoPagamento,
+          statusPagamento: statusPagamento,
+        );
+      }
+    }
+
+    await _salvarPedidosCompleto(userId);
+    notifyListeners();
   }
 
-  Future<void> _salvarHistoricoCompleto(String userId) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(
-      'historico_$userId',
-      jsonEncode(_historico.map((e) => _historicoItemToJson(e)).toList()),
-    );
-  }
+  Future<void> concluirPedido(OrderItemModel item, String userId) async {
+    final backendUid = item.backendUid ?? item.orderId;
 
-  Map<String, dynamic> _orderItemToJson(OrderItemModel e) => {
-    'id': e.id,
-    'order_id': e.orderId,
-    'product_id': e.productId,
-    'quantity': e.quantity,
-    'price': e.price,
-    'observations': e.observations,
-    'products': {
-      'id': e.product?.id ?? '',
-      'name': e.product?.name ?? 'Produto',
-      'image_url': e.product?.imageUrl,
-    },
-    'orders': {
-      'id': e.order?.id ?? '',
-      'payment_method': e.order?.paymentMethod ?? '',
-      'mesa': e.order?.mesa,
-      'locations': {
-        'id': e.order?.location?.id ?? '',
-        'name': e.order?.location?.name ?? '',
-        'address': e.order?.location?.address ?? '',
-      },
-    },
-  };
+    final itensPedido = _pedidos
+        .where((e) => (e.backendUid ?? e.orderId) == backendUid)
+        .toList();
 
-  Map<String, dynamic> _historicoItemToJson(HistoricoItemModel e) => {
-    'id': e.id,
-    'product_name': e.productName,
-    'product_image': e.productImage,
-    'quantity': e.quantity,
-    'price': e.price,
-    'total': e.total,
-    'created_at': e.createdAt,
-    'observations': e.observations,
-    'location_name': e.locationName,
-    'mesa': e.mesa,
-    'payment_method': e.paymentMethod,
-  };
+    if (itensPedido.isEmpty) return;
 
-  Future<void> concluirItem(String itemId, String userId) async {
-    final idx = _pedidos.indexWhere((e) => e.id == itemId);
-    if (idx < 0) return;
+    _pedidos.removeWhere((e) => (e.backendUid ?? e.orderId) == backendUid);
 
-    final item = _pedidos.removeAt(idx);
-
-    _historico.insert(
-      0,
-      HistoricoItemModel(
-        id: item.id,
-        productName: item.product?.name ?? 'Produto',
-        productImage: item.product?.imageUrl,
-        quantity: item.quantity,
-        price: item.price,
-        total: item.total,
-        createdAt: DateTime.now().toIso8601String(),
-        observations: item.observations,
-        locationName: item.order?.location?.name ?? '',
-        mesa: item.order?.mesa,
-        paymentMethod: item.order?.paymentMethod,
-      ),
-    );
+    for (final pedidoItem in itensPedido) {
+      _historico.insert(
+        0,
+        HistoricoItemModel(
+          id: pedidoItem.id,
+          productName: pedidoItem.product?.name ?? 'Produto',
+          productImage: pedidoItem.product?.imageUrl,
+          quantity: pedidoItem.quantity,
+          price: pedidoItem.price,
+          total: pedidoItem.total,
+          createdAt: DateTime.now().toIso8601String(),
+          observations: pedidoItem.observations,
+          locationName: pedidoItem.order?.location?.name ?? '',
+          mesa: pedidoItem.order?.mesa,
+          paymentMethod: pedidoItem.order?.paymentMethod,
+        ),
+      );
+    }
 
     await _salvarPedidosCompleto(userId);
     await _salvarHistoricoCompleto(userId);
@@ -187,6 +189,9 @@ class PedidosProvider extends ChangeNotifier {
       quantity: item.quantity,
       price: item.price,
       observations: item.observations,
+      backendUid: null,
+      saldoPagamento: 0.0,
+      statusPagamento: 1,
       product: ProductInfo(
         id: itemId,
         name: item.productName,
@@ -201,7 +206,71 @@ class PedidosProvider extends ChangeNotifier {
     );
 
     _pedidos.add(novo);
+
     await _salvarPedidosCompleto(userId);
     notifyListeners();
+  }
+
+  Future<void> _salvarPedidosCompleto(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      'pedidos_$userId',
+      jsonEncode(_pedidos.map(_orderItemToJson).toList()),
+    );
+  }
+
+  Future<void> _salvarHistoricoCompleto(String userId) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    await prefs.setString(
+      'historico_$userId',
+      jsonEncode(_historico.map(_historicoItemToJson).toList()),
+    );
+  }
+
+  Map<String, dynamic> _orderItemToJson(OrderItemModel e) {
+    return {
+      'id': e.id,
+      'order_id': e.orderId,
+      'product_id': e.productId,
+      'quantity': e.quantity,
+      'price': e.price,
+      'observations': e.observations,
+      'backend_uid': e.backendUid,
+      'saldo_pagamento': e.saldoPagamento,
+      'status_pagamento': e.statusPagamento,
+      'products': {
+        'id': e.product?.id ?? '',
+        'name': e.product?.name ?? 'Produto',
+        'image_url': e.product?.imageUrl,
+      },
+      'orders': {
+        'id': e.order?.id ?? '',
+        'payment_method': e.order?.paymentMethod ?? '',
+        'mesa': e.order?.mesa,
+        'locations': {
+          'id': e.order?.location?.id ?? '',
+          'name': e.order?.location?.name ?? '',
+          'address': e.order?.location?.address ?? '',
+        },
+      },
+    };
+  }
+
+  Map<String, dynamic> _historicoItemToJson(HistoricoItemModel e) {
+    return {
+      'id': e.id,
+      'product_name': e.productName,
+      'product_image': e.productImage,
+      'quantity': e.quantity,
+      'price': e.price,
+      'total': e.total,
+      'created_at': e.createdAt,
+      'observations': e.observations,
+      'location_name': e.locationName,
+      'mesa': e.mesa,
+      'payment_method': e.paymentMethod,
+    };
   }
 }
