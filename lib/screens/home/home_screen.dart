@@ -85,14 +85,14 @@ class _HomeScreenState extends State<HomeScreen> {
 
         if (!mounted) return;
 
-        CustomAlert.show(
-          context,
-          title: 'Pedido retirado',
-          message: 'O pedido foi movido para o histórico.',
-          confirmText: 'OK',
-          onConfirm: () {
-            Navigator.of(context).pushNamed('/historico');
-          },
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Pedido retirado e movido para o Histórico'
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 2),
+          ),
         );
       },
       onCancel: () {},
