@@ -7,6 +7,7 @@ class OrderItemModel {
   final String? observations;
   final ProductInfo? product;
   final OrderInfo? order;
+
   final String? backendUid;
   final double saldoPagamento;
   final int statusPagamento;
@@ -22,42 +23,16 @@ class OrderItemModel {
     this.order,
     this.backendUid,
     this.saldoPagamento = 0.0,
-    this.statusPagamento = 1,
+    this.statusPagamento = 0,
   });
 
   double get total => price * quantity;
 
-  bool get pagamentoConcluido => statusPagamento == 1 && saldoPagamento <= 0.01;
+  bool get pagamentoConcluido =>
+      statusPagamento == 1 && saldoPagamento <= 0.01;
 
-  bool get pagamentoParcial => !pagamentoConcluido && saldoPagamento > 0.01;
-
-  OrderItemModel copyWith({
-    String? id,
-    String? orderId,
-    String? productId,
-    int? quantity,
-    double? price,
-    String? observations,
-    ProductInfo? product,
-    OrderInfo? order,
-    String? backendUid,
-    double? saldoPagamento,
-    int? statusPagamento,
-  }) {
-    return OrderItemModel(
-      id: id ?? this.id,
-      orderId: orderId ?? this.orderId,
-      productId: productId ?? this.productId,
-      quantity: quantity ?? this.quantity,
-      price: price ?? this.price,
-      observations: observations ?? this.observations,
-      product: product ?? this.product,
-      order: order ?? this.order,
-      backendUid: backendUid ?? this.backendUid,
-      saldoPagamento: saldoPagamento ?? this.saldoPagamento,
-      statusPagamento: statusPagamento ?? this.statusPagamento,
-    );
-  }
+  bool get pagamentoParcial =>
+      !pagamentoConcluido && saldoPagamento > 0.01;
 
   factory OrderItemModel.fromJson(Map<String, dynamic> json) {
     return OrderItemModel(
@@ -67,13 +42,21 @@ class OrderItemModel {
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       price: (json['price'] as num?)?.toDouble() ?? 0.0,
       observations: json['observations']?.toString(),
-      product: json['products'] != null
-          ? ProductInfo.fromJson(json['products'])
-          : null,
-      order: json['orders'] != null ? OrderInfo.fromJson(json['orders']) : null,
       backendUid: json['backend_uid']?.toString(),
-      saldoPagamento: (json['saldo_pagamento'] as num?)?.toDouble() ?? 0.0,
-      statusPagamento: (json['status_pagamento'] as num?)?.toInt() ?? 1,
+      saldoPagamento:
+          (json['saldo_pagamento'] as num?)?.toDouble() ?? 0.0,
+      statusPagamento:
+          (json['status_pagamento'] as num?)?.toInt() ?? 0,
+      product: json['products'] != null
+          ? ProductInfo.fromJson(
+              Map<String, dynamic>.from(json['products']),
+            )
+          : null,
+      order: json['orders'] != null
+          ? OrderInfo.fromJson(
+              Map<String, dynamic>.from(json['orders']),
+            )
+          : null,
     );
   }
 }
@@ -83,13 +66,19 @@ class ProductInfo {
   final String name;
   final String? imageUrl;
 
-  ProductInfo({required this.id, required this.name, this.imageUrl});
+  ProductInfo({
+    required this.id,
+    required this.name,
+    this.imageUrl,
+  });
 
-  factory ProductInfo.fromJson(Map<String, dynamic> json) => ProductInfo(
-    id: json['id']?.toString() ?? '',
-    name: json['name']?.toString() ?? 'Produto',
-    imageUrl: json['image_url']?.toString(),
-  );
+  factory ProductInfo.fromJson(Map<String, dynamic> json) {
+    return ProductInfo(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? 'Produto',
+      imageUrl: json['image_url']?.toString(),
+    );
+  }
 }
 
 class OrderInfo {
@@ -98,16 +87,25 @@ class OrderInfo {
   final String? mesa;
   final LocationInfo? location;
 
-  OrderInfo({required this.id, this.paymentMethod, this.mesa, this.location});
+  OrderInfo({
+    required this.id,
+    this.paymentMethod,
+    this.mesa,
+    this.location,
+  });
 
-  factory OrderInfo.fromJson(Map<String, dynamic> json) => OrderInfo(
-    id: json['id']?.toString() ?? '',
-    paymentMethod: json['payment_method']?.toString(),
-    mesa: json['mesa']?.toString(),
-    location: json['locations'] != null
-        ? LocationInfo.fromJson(json['locations'])
-        : null,
-  );
+  factory OrderInfo.fromJson(Map<String, dynamic> json) {
+    return OrderInfo(
+      id: json['id']?.toString() ?? '',
+      paymentMethod: json['payment_method']?.toString(),
+      mesa: json['mesa']?.toString(),
+      location: json['locations'] != null
+          ? LocationInfo.fromJson(
+              Map<String, dynamic>.from(json['locations']),
+            )
+          : null,
+    );
+  }
 }
 
 class LocationInfo {
@@ -115,11 +113,17 @@ class LocationInfo {
   final String name;
   final String? address;
 
-  LocationInfo({required this.id, required this.name, this.address});
+  LocationInfo({
+    required this.id,
+    required this.name,
+    this.address,
+  });
 
-  factory LocationInfo.fromJson(Map<String, dynamic> json) => LocationInfo(
-    id: json['id']?.toString() ?? '',
-    name: json['name']?.toString() ?? '',
-    address: json['address']?.toString(),
-  );
+  factory LocationInfo.fromJson(Map<String, dynamic> json) {
+    return LocationInfo(
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      address: json['address']?.toString(),
+    );
+  }
 }

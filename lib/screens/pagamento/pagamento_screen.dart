@@ -533,7 +533,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       cart: _cart,
       metodo: metodo,
       locationId: _locationId ?? '',
-      locationName: _locationName ?? storage.locationName ?? '',
+      locationName: _locationName ?? '',
       mesa: _mesa,
       backendUid: _pedidoBackend?['uid']?.toString(),
       saldoPagamento: 0.0,

@@ -21,70 +21,50 @@ class _PixScreenState extends State<PixScreen> {
   String _pixCode = '';
   String? _saleCode;
   String? _pedidoUid;
-
   Map<String, dynamic>? _pagamentoConfirmado;
-
   bool _copiado = false;
   bool _pago = false;
   bool _carregando = true;
   bool _erroRede = false;
-
   int _pollAttempts = 0;
   int _falhasConsecutivas = 0;
-
   static const int _maxPollAttempts = 36;
-
   String? _erro;
-
   final PaymentService _paymentService = PaymentService();
   final OrderService _orderService = OrderService();
-
   Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final args = ModalRoute.of(context)?.settings.arguments as Map?;
-
       if (args == null) {
         if (!mounted) return;
-
         setState(() {
           _carregando = false;
           _erro = 'Não foi possível obter os dados do pagamento.';
         });
-
         return;
       }
-
       _valorTotal = (args['valorTotal'] as num?)?.toDouble() ?? 0.0;
-
       _pedidoUid = args['pedidoUid']?.toString();
-
       if (_pedidoUid == null || _pedidoUid!.isEmpty) {
         if (!mounted) return;
-
         setState(() {
           _carregando = false;
           _erro = 'Não foi possível identificar o pedido.';
         });
-
         return;
       }
-
       if (_valorTotal <= 0) {
         if (!mounted) return;
-
         setState(() {
           _carregando = false;
           _erro = 'O valor do pagamento é inválido.';
         });
-
         return;
       }
-
       await _criarPix();
     });
   }
@@ -97,40 +77,71 @@ class _PixScreenState extends State<PixScreen> {
 
   Future<void> _criarPix() async {
     if (!mounted) return;
-
     _pollTimer?.cancel();
-
     setState(() {
       _carregando = true;
       _erro = null;
       _pixCode = '';
       _pago = false;
       _copiado = false;
-
       _erroRede = false;
       _falhasConsecutivas = 0;
       _pollAttempts = 0;
     });
-
     try {
+      final user = context.read<AuthProvider>().user;
+      if (user == null) throw Exception('Usuário não autenticado.');
+      if (user.token.isEmpty) throw Exception('Token do cliente não encontrado.');
+      if (user.uid.isEmpty) throw Exception('UID do cliente não encontrado.');
+      if (_pedidoUid == null || _pedidoUid!.isEmpty) {
+        throw Exception('UID do pedido não encontrado.');
+      }
+
+      final pedido = await _orderService.buscarPedidoPorUid(
+        appClienteToken: user.token,
+        appClienteUid: user.uid,
+        pedidoUid: _pedidoUid!,
+      );
+
+      if (pedido == null) throw Exception('Pedido não encontrado no servidor.');
+
+      final saldo = (pedido['SaldoPagamentoPedido'] as num?)?.toDouble() ?? 0.0;
+
+      debugPrint('=== VALIDAÇÃO DO PEDIDO ANTES DO PIX ===');
+      debugPrint('Pedido UID: $_pedidoUid');
+      debugPrint('Saldo backend: $saldo');
+      debugPrint('Valor solicitado: $_valorTotal');
+
+      if (saldo <= 0.01) {
+        throw Exception('Este pedido já está totalmente pago.');
+      }
+
+      final valorPagamento = _valorTotal > saldo ? saldo : _valorTotal;
+      if (valorPagamento <= 0) {
+        throw Exception('O saldo do pedido é inválido.');
+      }
+
+      debugPrint('Valor final do PIX: $valorPagamento');
+
       _saleCode ??= _paymentService.generateSaleCode();
 
       final charge = await _paymentService.createPixCharge(
-        amount: _valorTotal,
+        amount: valorPagamento,
         saleCode: _saleCode!,
       );
 
       if (!mounted) return;
 
       setState(() {
+        _valorTotal = valorPagamento;
         _pixCode = charge.copyPasteCode;
         _carregando = false;
       });
 
       _iniciarPolling(charge.chargeId, charge.expiresAt);
     } catch (e) {
+      debugPrint('ERRO AO CRIAR PIX: $e');
       if (!mounted) return;
-
       setState(() {
         _carregando = false;
         _erro = _tratarErro(e);
@@ -142,7 +153,6 @@ class _PixScreenState extends State<PixScreen> {
     _pollAttempts = 0;
     _falhasConsecutivas = 0;
     _erroRede = false;
-
     _pollTimer?.cancel();
 
     _pollTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
@@ -153,17 +163,11 @@ class _PixScreenState extends State<PixScreen> {
 
       if (DateTime.now().isAfter(expiresAt)) {
         timer.cancel();
-
         if (!mounted) return;
-
         setState(() {
           _erroRede = false;
-
-          _erro =
-              'Este PIX expirou. '
-              'Gere um novo PIX para continuar o pagamento.';
+          _erro = 'Este PIX expirou. Gere um novo PIX para continuar o pagamento.';
         });
-
         return;
       }
 
@@ -171,23 +175,16 @@ class _PixScreenState extends State<PixScreen> {
 
       if (_pollAttempts >= _maxPollAttempts) {
         timer.cancel();
-
         if (!mounted) return;
-
         setState(() {
           _erroRede = false;
-
-          _erro =
-              'Pagamento ainda não confirmado. '
-              'Você pode tentar novamente ou gerar um novo PIX.';
+          _erro = 'Pagamento ainda não confirmado. Você pode tentar novamente ou gerar um novo PIX.';
         });
-
         return;
       }
 
       try {
         final status = await _paymentService.checkPixStatus(orderId);
-
         if (!mounted) return;
 
         if (_erroRede || _falhasConsecutivas > 0) {
@@ -202,17 +199,14 @@ class _PixScreenState extends State<PixScreen> {
 
           final pagamento = await _paymentService.getPixPaymentData(orderId);
 
-          debugPrint('=== PAGAMENTO CONFIRMADO ===');
+          debugPrint('=== PAGAMENTO CONFIRMADO NO PAGBANK ===');
           debugPrint('Pagamento: $pagamento');
 
           if (pagamento == null) {
             if (!mounted) return;
-
             setState(() {
-              _erro =
-                  'Pagamento confirmado, mas não foi possível obter os dados.';
+              _erro = 'Pagamento confirmado, mas não foi possível obter os dados da transação.';
             });
-
             return;
           }
 
@@ -223,13 +217,26 @@ class _PixScreenState extends State<PixScreen> {
           } catch (e) {
             debugPrint('ERRO AO REGISTRAR PAGAMENTO: $e');
 
+            final pagamentoConfirmado = await _verificarSePedidoFoiQuitado();
+
+            if (pagamentoConfirmado) {
+              debugPrint('Pagamento já estava registrado no backend.');
+              if (!mounted) return;
+              setState(() {
+                _erro = null;
+                _pago = true;
+                _erroRede = false;
+              });
+              await Future.delayed(const Duration(milliseconds: 900));
+              if (!mounted) return;
+              Navigator.of(context).pop(true);
+              return;
+            }
+
             if (!mounted) return;
-
             setState(() {
-              _erro =
-                  'O PIX foi confirmado, mas houve um erro ao registrar o pagamento no pedido.';
+              _erro = 'O PIX foi confirmado, mas não foi possível atualizar o pedido.';
             });
-
             return;
           }
 
@@ -237,6 +244,7 @@ class _PixScreenState extends State<PixScreen> {
 
           setState(() {
             _pago = true;
+            _erro = null;
             _erroRede = false;
           });
 
@@ -245,39 +253,30 @@ class _PixScreenState extends State<PixScreen> {
           if (!mounted) return;
 
           Navigator.of(context).pop(true);
-
           return;
         }
 
         if (status == 'EXPIRED') {
           timer.cancel();
-
           setState(() {
             _erroRede = false;
-
-            _erro =
-                'Este PIX expirou. '
-                'Gere um novo PIX para continuar o pagamento.';
+            _erro = 'Este PIX expirou. Gere um novo PIX para continuar o pagamento.';
           });
-
           return;
         }
 
         if (status == 'DECLINED' || status == 'CANCELED') {
           timer.cancel();
-
           setState(() {
             _erroRede = false;
             _erro = 'Pagamento não aprovado.';
           });
-
           return;
         }
-      } catch (_) {
+      } catch (e) {
+        debugPrint('ERRO AO CONSULTAR PIX: $e');
         _falhasConsecutivas++;
-
         if (!mounted) return;
-
         if (_falhasConsecutivas >= 2 && !_erroRede) {
           setState(() {
             _erroRede = true;
@@ -287,24 +286,13 @@ class _PixScreenState extends State<PixScreen> {
     });
   }
 
-  Future<void> _registrarPagamentoBackend(
-    Map<String, dynamic> pagamento,
-  ) async {
+  Future<void> _registrarPagamentoBackend(Map<String, dynamic> pagamento) async {
     final user = context.read<AuthProvider>().user;
     final pedidoUid = _pedidoUid;
 
-    if (user == null) {
-      throw Exception('Usuário não autenticado.');
-    }
-
-    if (user.token.isEmpty) {
-      throw Exception('Token do cliente não encontrado.');
-    }
-
-    if (user.uid.isEmpty) {
-      throw Exception('UID do cliente não encontrado.');
-    }
-
+    if (user == null) throw Exception('Usuário não autenticado.');
+    if (user.token.isEmpty) throw Exception('Token do cliente não encontrado.');
+    if (user.uid.isEmpty) throw Exception('UID do cliente não encontrado.');
     if (pedidoUid == null || pedidoUid.isEmpty) {
       throw Exception('UID do pedido não encontrado.');
     }
@@ -321,8 +309,8 @@ class _PixScreenState extends State<PixScreen> {
       throw Exception('ID da transação PIX não encontrado.');
     }
 
-    debugPrint('=== PAGAMENTO WIDEIAS ===');
-    debugPrint('Pedido: $pedidoUid');
+    debugPrint('=== REGISTRAR PAGAMENTO WIDEIAS ===');
+    debugPrint('Pedido UID: $pedidoUid');
     debugPrint('Transaction Code: $transactionCode');
     debugPrint('Transaction ID: $transactionID');
     debugPrint('EndToEnd ID disponível: ${endToEndId.isNotEmpty}');
@@ -346,8 +334,51 @@ class _PixScreenState extends State<PixScreen> {
     );
   }
 
+  Future<bool> _verificarSePedidoFoiQuitado() async {
+    try {
+      final user = context.read<AuthProvider>().user;
+
+      if (user == null ||
+          user.token.isEmpty ||
+          user.uid.isEmpty ||
+          _pedidoUid == null ||
+          _pedidoUid!.isEmpty) {
+        return false;
+      }
+
+      final pedido = await _orderService.buscarPedidoPorUid(
+        appClienteToken: user.token,
+        appClienteUid: user.uid,
+        pedidoUid: _pedidoUid!,
+      );
+
+      if (pedido == null) return false;
+
+      final saldo = (pedido['SaldoPagamentoPedido'] as num?)?.toDouble() ?? 0.0;
+      final status = (pedido['Status'] as num?)?.toInt();
+
+      debugPrint('=== VERIFICAÇÃO PÓS-ERRO ===');
+      debugPrint('Pedido: $_pedidoUid');
+      debugPrint('Status backend: $status');
+      debugPrint('Saldo backend: $saldo');
+
+      return saldo <= 0.01;
+    } catch (e) {
+      debugPrint('ERRO AO VERIFICAR PEDIDO APÓS FALHA: $e');
+      return false;
+    }
+  }
+
   String _tratarErro(Object erro) {
     final mensagem = erro.toString();
+
+    if (mensagem.contains('Este pedido já está totalmente pago')) {
+      return 'Este pedido já está totalmente pago.';
+    }
+
+    if (mensagem.contains('Pedido não encontrado')) {
+      return 'Não foi possível localizar o pedido.';
+    }
 
     if (mensagem.contains('Token Sandbox não configurado')) {
       return 'Token do PagBank Sandbox não configurado.';
@@ -362,6 +393,66 @@ class _PixScreenState extends State<PixScreen> {
     }
 
     return 'Não foi possível gerar o pagamento PIX.';
+  }
+
+  Future<void> _verificarPagamentoNovamente() async {
+    if (_pagamentoConfirmado == null) {
+      await _criarPix();
+      return;
+    }
+
+    if (!mounted) return;
+
+    setState(() {
+      _carregando = true;
+      _erro = null;
+    });
+
+    try {
+      final quitado = await _verificarSePedidoFoiQuitado();
+
+      if (quitado) {
+        if (!mounted) return;
+
+        setState(() {
+          _carregando = false;
+          _erro = null;
+          _pago = true;
+        });
+
+        await Future.delayed(const Duration(milliseconds: 900));
+
+        if (!mounted) return;
+
+        Navigator.of(context).pop(true);
+        return;
+      }
+
+      await _registrarPagamentoBackend(_pagamentoConfirmado!);
+
+      if (!mounted) return;
+
+      setState(() {
+        _carregando = false;
+        _erro = null;
+        _pago = true;
+      });
+
+      await Future.delayed(const Duration(milliseconds: 900));
+
+      if (!mounted) return;
+
+      Navigator.of(context).pop(true);
+    } catch (e) {
+      debugPrint('ERRO AO TENTAR REGISTRAR NOVAMENTE: $e');
+
+      if (!mounted) return;
+
+      setState(() {
+        _carregando = false;
+        _erro = 'Não foi possível atualizar o pedido. Verifique o status antes de tentar novamente.';
+      });
+    }
   }
 
   void _copiar() {
@@ -402,18 +493,12 @@ class _PixScreenState extends State<PixScreen> {
               child: Column(
                 children: [
                   _buildTotalCard(),
-
                   const SizedBox(height: 24),
-
                   _buildPixCard(),
-
                   const SizedBox(height: 24),
-
                   if (_pixCode.isNotEmpty && !_pago && _erro == null)
                     _buildCopyButton(),
-
                   const SizedBox(height: 20),
-
                   _buildStatus(),
                 ],
               ),
@@ -465,7 +550,10 @@ class _PixScreenState extends State<PixScreen> {
         color: AppColors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.06), blurRadius: 12),
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+          ),
         ],
       ),
       child: Column(
@@ -475,7 +563,9 @@ class _PixScreenState extends State<PixScreen> {
               width: 200,
               height: 200,
               child: Center(
-                child: CircularProgressIndicator(color: AppColors.bluePrimary),
+                child: CircularProgressIndicator(
+                  color: AppColors.bluePrimary,
+                ),
               ),
             )
           else if (_erro != null)
@@ -503,32 +593,7 @@ class _PixScreenState extends State<PixScreen> {
                     const SizedBox(height: 16),
                     TextButton.icon(
                       onPressed: _pagamentoConfirmado != null
-                          ? () async {
-                              try {
-                                await _registrarPagamentoBackend(
-                                  _pagamentoConfirmado!,
-                                );
-
-                                if (!mounted) return;
-
-                                setState(() {
-                                  _erro = null;
-                                  _pago = true;
-                                });
-
-                                await Future.delayed(
-                                  const Duration(milliseconds: 900),
-                                );
-
-                                if (!mounted) return;
-
-                                Navigator.of(context).pop(true);
-                              } catch (e) {
-                                debugPrint(
-                                  'ERRO AO TENTAR REGISTRAR NOVAMENTE: $e',
-                                );
-                              }
-                            }
+                          ? _verificarPagamentoNovamente
                           : _criarPix,
                       icon: Icon(
                         _pagamentoConfirmado != null
@@ -537,7 +602,7 @@ class _PixScreenState extends State<PixScreen> {
                       ),
                       label: Text(
                         _pagamentoConfirmado != null
-                            ? 'Tentar registrar pagamento novamente'
+                            ? 'Verificar pagamento novamente'
                             : 'Gerar novo PIX',
                       ),
                     ),
@@ -552,13 +617,14 @@ class _PixScreenState extends State<PixScreen> {
               size: 200,
               backgroundColor: Colors.white,
             ),
-
           const SizedBox(height: 12),
-
           if (!_pago && _erro == null)
             const Text(
               'Escaneie com o app do seu banco',
-              style: TextStyle(fontSize: 14, color: AppColors.textSection),
+              style: TextStyle(
+                fontSize: 14,
+                color: AppColors.textSection,
+              ),
             ),
         ],
       ),
@@ -577,7 +643,9 @@ class _PixScreenState extends State<PixScreen> {
               : AppColors.white,
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: _copiado ? AppColors.greenSuccess : AppColors.cardBorder,
+            color: _copiado
+                ? AppColors.greenSuccess
+                : AppColors.cardBorder,
             width: 1.5,
           ),
         ),
@@ -585,13 +653,19 @@ class _PixScreenState extends State<PixScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              _copiado ? Icons.check_outlined : Icons.copy_outlined,
-              color: _copiado ? AppColors.greenSuccess : AppColors.bluePrimary,
+              _copiado
+                  ? Icons.check_outlined
+                  : Icons.copy_outlined,
+              color: _copiado
+                  ? AppColors.greenSuccess
+                  : AppColors.bluePrimary,
               size: 20,
             ),
             const SizedBox(width: 8),
             Text(
-              _copiado ? 'Código copiado' : 'Copiar código PIX',
+              _copiado
+                  ? 'Código copiado'
+                  : 'Copiar código PIX',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.bold,
@@ -610,7 +684,11 @@ class _PixScreenState extends State<PixScreen> {
     if (_pago) {
       return const Column(
         children: [
-          Icon(Icons.check_circle, color: AppColors.greenSuccess, size: 56),
+          Icon(
+            Icons.check_circle,
+            color: AppColors.greenSuccess,
+            size: 56,
+          ),
           SizedBox(height: 8),
           Text(
             'Pagamento confirmado!',
@@ -624,7 +702,10 @@ class _PixScreenState extends State<PixScreen> {
           Text(
             'Seu pagamento foi confirmado com sucesso.',
             textAlign: TextAlign.center,
-            style: TextStyle(fontSize: 14, color: AppColors.textEmpty),
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textEmpty,
+            ),
           ),
         ],
       );
@@ -649,7 +730,10 @@ class _PixScreenState extends State<PixScreen> {
           SizedBox(width: 8),
           Text(
             'Gerando PIX...',
-            style: TextStyle(fontSize: 13, color: AppColors.textEmpty),
+            style: TextStyle(
+              fontSize: 13,
+              color: AppColors.textEmpty,
+            ),
           ),
         ],
       );
@@ -672,7 +756,10 @@ class _PixScreenState extends State<PixScreen> {
             child: Text(
               'Sem conexão. Tentando reconectar...',
               textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: AppColors.textEmpty),
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textEmpty,
+              ),
             ),
           ),
         ],
@@ -693,7 +780,10 @@ class _PixScreenState extends State<PixScreen> {
         SizedBox(width: 8),
         Text(
           'Aguardando pagamento...',
-          style: TextStyle(fontSize: 13, color: AppColors.textEmpty),
+          style: TextStyle(
+            fontSize: 13,
+            color: AppColors.textEmpty,
+          ),
         ),
       ],
     );
@@ -759,7 +849,10 @@ class _PixScreenState extends State<PixScreen> {
     return Container(
       width: size,
       height: size,
-      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+      ),
     );
   }
 }

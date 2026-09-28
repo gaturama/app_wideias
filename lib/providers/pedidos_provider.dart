@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/order_item_model.dart';
 import '../models/historico_item_model.dart';
 import '../models/cart_item_model.dart';
+import '../core/services/order_service.dart';
 
 class PedidosProvider extends ChangeNotifier {
   List<OrderItemModel> _pedidos = [];
@@ -56,63 +57,74 @@ class PedidosProvider extends ChangeNotifier {
     String? mesa,
     String? backendUid,
     double saldoPagamento = 0.0,
-    int statusPagamento = 1,
+    int statusPagamento = 0,
   }) async {
-    if (backendUid != null && backendUid.isNotEmpty) {
-      final existe = _pedidos.any((e) => e.backendUid == backendUid);
+    final orderId =
+        backendUid ?? 'order-${DateTime.now().millisecondsSinceEpoch}';
 
-      if (existe) {
-        for (int i = 0; i < _pedidos.length; i++) {
-          if (_pedidos[i].backendUid == backendUid) {
-            _pedidos[i] = _pedidos[i].copyWith(
-              saldoPagamento: saldoPagamento,
-              statusPagamento: statusPagamento,
-            );
-          }
+    final existentes = backendUid == null
+        ? <OrderItemModel>[]
+        : _pedidos.where((item) => item.backendUid == backendUid).toList();
+
+    if (existentes.isNotEmpty) {
+      _pedidos = _pedidos.map((item) {
+        if (item.backendUid != backendUid) {
+          return item;
         }
 
-        await _salvarPedidosCompleto(userId);
-        notifyListeners();
-        return;
-      }
-    }
+        return OrderItemModel(
+          id: item.id,
+          orderId: item.orderId,
+          productId: item.productId,
+          quantity: 1,
+          price: item.price,
+          observations: item.observations,
+          product: item.product,
+          order: item.order,
+          backendUid: item.backendUid,
+          saldoPagamento: saldoPagamento,
+          statusPagamento: statusPagamento,
+        );
+      }).toList();
+    } else {
+      final novos = <OrderItemModel>[];
+      final timestamp = DateTime.now().microsecondsSinceEpoch;
 
-    final orderId = backendUid?.isNotEmpty == true
-        ? backendUid!
-        : 'order-${DateTime.now().millisecondsSinceEpoch}';
-
-    final novos = cart
-        .map(
-          (item) => OrderItemModel(
-            id: item.cartEntryId,
-            orderId: orderId,
-            productId: item.id,
-            quantity: item.qty,
-            price: item.precoUnitario,
-            observations: item.observacao,
-            backendUid: backendUid,
-            saldoPagamento: saldoPagamento,
-            statusPagamento: statusPagamento,
-            product: ProductInfo(
-              id: item.id,
-              name: item.name,
-              imageUrl: item.imageUrl,
-            ),
-            order: OrderInfo(
-              id: orderId,
-              paymentMethod: metodo,
-              mesa: mesa,
-              location: LocationInfo(
-                id: locationId,
-                name: locationName,
-                address: '',
+      for (final item in cart) {
+        for (int i = 0; i < item.qty; i++) {
+          novos.add(
+            OrderItemModel(
+              id: '${item.cartEntryId}-unit-${i + 1}-$timestamp',
+              orderId: orderId,
+              productId: item.id,
+              quantity: 1,
+              price: item.precoUnitario,
+              observations: item.observacao,
+              backendUid: backendUid,
+              saldoPagamento: saldoPagamento,
+              statusPagamento: statusPagamento,
+              product: ProductInfo(
+                id: item.id,
+                name: item.name,
+                imageUrl: item.imageUrl,
+              ),
+              order: OrderInfo(
+                id: orderId,
+                paymentMethod: metodo,
+                mesa: mesa,
+                location: LocationInfo(
+                  id: locationId,
+                  name: locationName,
+                  address: '',
+                ),
               ),
             ),
-          ),
-        )
-        .toList();
+          );
+        }
+      }
 
-    _pedidos.addAll(novos);
+      _pedidos.addAll(novos);
+    }
 
     await _salvarPedidosCompleto(userId);
     notifyListeners();
@@ -126,7 +138,17 @@ class PedidosProvider extends ChangeNotifier {
   }) async {
     for (int i = 0; i < _pedidos.length; i++) {
       if (_pedidos[i].backendUid == backendUid) {
-        _pedidos[i] = _pedidos[i].copyWith(
+        final pedido = _pedidos[i];
+        _pedidos[i] = OrderItemModel(
+          id: pedido.id,
+          orderId: pedido.orderId,
+          productId: pedido.productId,
+          quantity: pedido.quantity,
+          price: pedido.price,
+          observations: pedido.observations,
+          product: pedido.product,
+          order: pedido.order,
+          backendUid: pedido.backendUid,
           saldoPagamento: saldoPagamento,
           statusPagamento: statusPagamento,
         );
@@ -134,6 +156,74 @@ class PedidosProvider extends ChangeNotifier {
     }
 
     await _salvarPedidosCompleto(userId);
+    notifyListeners();
+  }
+
+  Future<void> sincronizarComBackend({
+    required String appClienteToken,
+    required String appClienteUid,
+    required String userId,
+  }) async {
+    final service = OrderService();
+
+    final response = await service.getPedidos(
+      appClienteToken: appClienteToken,
+      appClienteUid: appClienteUid,
+    );
+
+    if (response is! Map) return;
+
+    final pedidosBackend = response['pedidos'];
+
+    if (pedidosBackend is! List) return;
+
+    final porUid = <String, Map<String, dynamic>>{};
+
+    for (final pedido in pedidosBackend) {
+      if (pedido is! Map) continue;
+
+      final data = Map<String, dynamic>.from(pedido);
+      final uid = data['UID']?.toString() ?? data['uid']?.toString() ?? '';
+
+      if (uid.isEmpty) continue;
+
+      porUid[uid] = data;
+    }
+
+    _pedidos = _pedidos.map((item) {
+      final backendUid = item.backendUid;
+
+      if (backendUid == null || backendUid.isEmpty) {
+        return item;
+      }
+
+      final pedido = porUid[backendUid];
+
+      if (pedido == null) {
+        return item;
+      }
+
+      final saldo = (pedido['SaldoPagamentoPedido'] as num?)?.toDouble() ?? 0.0;
+
+      final status = (pedido['Status'] as num?)?.toInt() ?? 0;
+
+      return OrderItemModel(
+        id: item.id,
+        orderId: item.orderId,
+        productId: item.productId,
+        quantity: item.quantity,
+        price: item.price,
+        observations: item.observations,
+        product: item.product,
+        order: item.order,
+        backendUid: item.backendUid,
+        saldoPagamento: saldo,
+        statusPagamento: status,
+      );
+    }).toList();
+
+    await _salvarPedidosCompleto(userId);
+
     notifyListeners();
   }
 
@@ -166,6 +256,35 @@ class PedidosProvider extends ChangeNotifier {
         ),
       );
     }
+
+    await _salvarPedidosCompleto(userId);
+    await _salvarHistoricoCompleto(userId);
+
+    notifyListeners();
+  }
+
+  Future<void> concluirItem(String itemId, String userId) async {
+    final idx = _pedidos.indexWhere((e) => e.id == itemId);
+    if (idx < 0) return;
+
+    final item = _pedidos.removeAt(idx);
+
+    _historico.insert(
+      0,
+      HistoricoItemModel(
+        id: item.id,
+        productName: item.product?.name ?? 'Produto',
+        productImage: item.product?.imageUrl,
+        quantity: item.quantity,
+        price: item.price,
+        total: item.total,
+        createdAt: DateTime.now().toIso8601String(),
+        observations: item.observations,
+        locationName: item.order?.location?.name ?? '',
+        mesa: item.order?.mesa,
+        paymentMethod: item.order?.paymentMethod,
+      ),
+    );
 
     await _salvarPedidosCompleto(userId);
     await _salvarHistoricoCompleto(userId);
@@ -229,34 +348,32 @@ class PedidosProvider extends ChangeNotifier {
     );
   }
 
-  Map<String, dynamic> _orderItemToJson(OrderItemModel e) {
-    return {
-      'id': e.id,
-      'order_id': e.orderId,
-      'product_id': e.productId,
-      'quantity': e.quantity,
-      'price': e.price,
-      'observations': e.observations,
-      'backend_uid': e.backendUid,
-      'saldo_pagamento': e.saldoPagamento,
-      'status_pagamento': e.statusPagamento,
-      'products': {
-        'id': e.product?.id ?? '',
-        'name': e.product?.name ?? 'Produto',
-        'image_url': e.product?.imageUrl,
+  Map<String, dynamic> _orderItemToJson(OrderItemModel e) => {
+    'id': e.id,
+    'order_id': e.orderId,
+    'product_id': e.productId,
+    'quantity': e.quantity,
+    'price': e.price,
+    'observations': e.observations,
+    'backend_uid': e.backendUid,
+    'saldo_pagamento': e.saldoPagamento,
+    'status_pagamento': e.statusPagamento,
+    'products': {
+      'id': e.product?.id ?? '',
+      'name': e.product?.name ?? 'Produto',
+      'image_url': e.product?.imageUrl,
+    },
+    'orders': {
+      'id': e.order?.id ?? '',
+      'payment_method': e.order?.paymentMethod ?? '',
+      'mesa': e.order?.mesa,
+      'locations': {
+        'id': e.order?.location?.id ?? '',
+        'name': e.order?.location?.name ?? '',
+        'address': e.order?.location?.address ?? '',
       },
-      'orders': {
-        'id': e.order?.id ?? '',
-        'payment_method': e.order?.paymentMethod ?? '',
-        'mesa': e.order?.mesa,
-        'locations': {
-          'id': e.order?.location?.id ?? '',
-          'name': e.order?.location?.name ?? '',
-          'address': e.order?.location?.address ?? '',
-        },
-      },
-    };
-  }
+    },
+  };
 
   Map<String, dynamic> _historicoItemToJson(HistoricoItemModel e) {
     return {

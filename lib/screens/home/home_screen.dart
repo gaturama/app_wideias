@@ -7,6 +7,7 @@ import '../../providers/pedidos_provider.dart';
 import '../../providers/storage_provider.dart';
 import '../../widgets/custom_alert.dart';
 import '../../widgets/bottom.nav_bar.dart';
+import '../../core/services/order_service.dart';
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -32,9 +33,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final auth = context.read<AuthProvider>();
     final pedidos = context.read<PedidosProvider>();
+    final user = auth.user;
 
-    if (auth.user != null) {
-      await pedidos.carregar(auth.user!.id);
+    if (user != null) {
+      await pedidos.carregar(user.id);
+
+      try {
+        await pedidos.sincronizarComBackend(
+          appClienteToken: user.token,
+          appClienteUid: user.uid,
+          userId: user.id,
+        );
+      } catch (e) {
+        debugPrint('Erro ao sincronizar pedidos: $e');
+      }
     }
 
     if (mounted) {
@@ -45,8 +57,8 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  void _continuarPagamento(OrderItemModel item) {
-    Navigator.of(context).pushNamed(
+  Future<void> _continuarPagamento(OrderItemModel item) async {
+    await Navigator.of(context).pushNamed(
       '/pagamento',
       arguments: {
         'pedidoUid': item.backendUid ?? item.orderId,
@@ -56,40 +68,34 @@ class _HomeScreenState extends State<HomeScreen> {
         'mesa': item.order?.mesa,
       },
     );
+
+    if (!mounted) return;
+
+    await _carregarDados(refresh: true);
   }
 
-  void _confirmarRetirada(List<OrderItemModel> itens) {
-    if (itens.isEmpty) return;
+  void _confirmarRetirada(OrderItemModel item) {
+    if (!item.pagamentoConcluido) return;
 
-    final pedido = itens.first;
-
-    if (!pedido.pagamentoConcluido) {
-      return;
-    }
-
-    final produtos = itens
-        .map((item) => '${item.quantity}x ${item.product?.name ?? 'Produto'}')
-        .join('\n');
+    final produto = '${item.quantity}x ${item.product?.name ?? 'Produto'}';
 
     CustomAlert.show(
       context,
       title: 'Confirmar retirada',
-      message: 'Você está retirando este pedido?\n\n$produtos',
+      message: 'Você está retirando este produto?\n\n$produto',
       confirmText: 'Sim',
       cancelText: 'Cancelar',
       onConfirm: () async {
         final auth = context.read<AuthProvider>();
         final pedidosProvider = context.read<PedidosProvider>();
 
-        await pedidosProvider.concluirPedido(pedido, auth.user?.id ?? '');
+        await pedidosProvider.concluirItem(item.id, auth.user?.id ?? '');
 
         if (!mounted) return;
 
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text(
-              'Pedido retirado e movido para o Histórico'
-            ),
+            content: Text('Produto retirado e movido para o Histórico.'),
             behavior: SnackBarBehavior.floating,
             duration: Duration(seconds: 2),
           ),
@@ -99,27 +105,13 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Map<String, List<OrderItemModel>> _agruparPedidos(
-    List<OrderItemModel> itens,
-  ) {
-    final grupos = <String, List<OrderItemModel>>{};
-
-    for (final item in itens) {
-      final chave = item.backendUid ?? item.orderId;
-      grupos.putIfAbsent(chave, () => []);
-      grupos[chave]!.add(item);
-    }
-
-    return grupos;
-  }
-
   @override
   Widget build(BuildContext context) {
     final storage = context.watch<StorageProvider>();
     final pedidosProvider = context.watch<PedidosProvider>();
     final auth = context.watch<AuthProvider>();
 
-    final grupos = _agruparPedidos(pedidosProvider.pedidos);
+    final pedidos = pedidosProvider.pedidos;
 
     return Scaffold(
       backgroundColor: AppColors.background,
@@ -143,7 +135,7 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
             ),
           ),
-          Expanded(child: _buildBody(grupos.values.toList())),
+          Expanded(child: _buildBody(pedidos)),
         ],
       ),
     );
@@ -245,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildBody(List<List<OrderItemModel>> pedidos) {
+  Widget _buildBody(List<OrderItemModel> pedidos) {
     if (_loading) {
       return const Center(
         child: Column(
@@ -300,17 +292,11 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
-  Widget _buildCard(List<OrderItemModel> itens) {
-    final item = itens.first;
-
-    final total = itens.fold<double>(0.0, (sum, item) => sum + item.total);
-
+  Widget _buildCard(OrderItemModel item) {
+    final total = item.total;
     final saldo = item.saldoPagamento;
     final pagamentoConcluido = item.pagamentoConcluido;
-
-    final produtos = itens
-        .map((item) => '${item.quantity}x ${item.product?.name ?? 'Produto'}')
-        .join('\n');
+    final produto = '${item.quantity}x ${item.product?.name ?? 'Produto'}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -354,7 +340,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      produtos,
+                      produto,
                       style: const TextStyle(
                         fontSize: 15,
                         fontWeight: FontWeight.bold,
@@ -468,7 +454,7 @@ class _HomeScreenState extends State<HomeScreen> {
             height: 46,
             child: ElevatedButton.icon(
               onPressed: pagamentoConcluido
-                  ? () => _confirmarRetirada(itens)
+                  ? () => _confirmarRetirada(item)
                   : null,
               icon: Icon(
                 pagamentoConcluido

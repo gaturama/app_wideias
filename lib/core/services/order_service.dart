@@ -6,9 +6,7 @@ import 'package:wideias_app/models/cart_item_model.dart';
 class OrderService {
   static const String _baseUrl =
       'https://wideias.com.br/financeiro/api/externo/appwideiasclientes';
-
   static const String _basicUser = String.fromEnvironment('WIDEIAS_BASIC_USER');
-
   static const String _basicPassword = String.fromEnvironment(
     'WIDEIAS_BASIC_PASSWORD',
   );
@@ -21,17 +19,25 @@ class OrderService {
     required List<CartItemModel> cart,
     String? observacao,
   }) async {
+    if (_basicUser.isEmpty || _basicPassword.isEmpty) {
+      throw Exception('Basic Auth não configurado.');
+    }
+    if (appClienteToken.isEmpty) {
+      throw Exception('Token do cliente não encontrado.');
+    }
+    if (appClienteUid.isEmpty) {
+      throw Exception('UID do cliente não encontrado.');
+    }
+
     final basicEncoded = base64Encode(
       utf8.encode('$_basicUser:$_basicPassword'),
     );
 
     final itens = cart.map((item) {
       final idProduto = int.tryParse(item.id);
-
       if (idProduto == null || idProduto <= 0) {
         throw Exception('ID inválido para o produto "${item.name}".');
       }
-
       return {
         'idProduto': idProduto,
         'idCardapio': item.idCardapio,
@@ -71,7 +77,10 @@ class OrderService {
     debugPrint('HTTP PEDIDO: ${response.statusCode}');
     debugPrint('BODY PEDIDO: ${response.body}');
 
-    final decoded = jsonDecode(response.body);
+    dynamic decoded;
+    if (response.body.trim().isNotEmpty) {
+      decoded = jsonDecode(response.body);
+    }
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
@@ -95,11 +104,9 @@ class OrderService {
     if (_basicUser.isEmpty || _basicPassword.isEmpty) {
       throw Exception('Basic Auth não configurado.');
     }
-
     if (appClienteToken.isEmpty) {
       throw Exception('Token do cliente não encontrado.');
     }
-
     if (appClienteUid.isEmpty) {
       throw Exception('UID do cliente não encontrado.');
     }
@@ -108,15 +115,8 @@ class OrderService {
       utf8.encode('$_basicUser:$_basicPassword'),
     );
 
-    final url = '$_baseUrl/pedidos/$appClienteUid';
-
-    debugPrint('=== CONSULTAR PEDIDOS ===');
-    debugPrint('URL: $url');
-    debugPrint('UID disponível: ${appClienteUid.isNotEmpty}');
-    debugPrint('Token disponível: ${appClienteToken.isNotEmpty}');
-
     final response = await http.get(
-      Uri.parse(url),
+      Uri.parse('$_baseUrl/pedidos/$appClienteUid'),
       headers: {
         'Accept': 'application/json',
         'Authorization': 'Basic $basicEncoded',
@@ -125,30 +125,68 @@ class OrderService {
       },
     );
 
+    debugPrint('=== CONSULTAR PEDIDOS ===');
     debugPrint('HTTP PEDIDOS: ${response.statusCode}');
-
     debugPrint('BODY PEDIDOS: ${response.body}');
 
     if (response.statusCode == 401) {
       throw Exception('Sessão inválida ou não autorizada.');
     }
-
     if (response.statusCode == 403) {
       throw Exception('Sem permissão para consultar os pedidos.');
     }
-
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw Exception(
-        'Erro ao consultar pedidos '
-        '(${response.statusCode}): ${response.body}',
+        'Erro ao consultar pedidos (${response.statusCode}): ${response.body}',
       );
     }
-
     if (response.body.trim().isEmpty) {
       return null;
     }
 
     return jsonDecode(response.body);
+  }
+
+  Future<Map<String, dynamic>?> buscarPedidoPorUid({
+    required String appClienteToken,
+    required String appClienteUid,
+    required String pedidoUid,
+  }) async {
+    if (pedidoUid.isEmpty) {
+      throw Exception('UID do pedido não encontrado.');
+    }
+
+    final response = await getPedidos(
+      appClienteToken: appClienteToken,
+      appClienteUid: appClienteUid,
+    );
+
+    if (response == null) {
+      return null;
+    }
+
+    final data = response is Map<String, dynamic>
+        ? response
+        : Map<String, dynamic>.from(response as Map);
+
+    final pedidos = data['pedidos'];
+
+    if (pedidos is! List) {
+      return null;
+    }
+
+    for (final item in pedidos) {
+      if (item is! Map) continue;
+
+      final pedido = Map<String, dynamic>.from(item);
+      final uid = pedido['UID']?.toString() ?? pedido['uid']?.toString() ?? '';
+
+      if (uid == pedidoUid) {
+        return pedido;
+      }
+    }
+
+    return null;
   }
 
   Future<Map<String, dynamic>> registrarPagamentoPedido({
@@ -168,15 +206,12 @@ class OrderService {
     if (_basicUser.isEmpty || _basicPassword.isEmpty) {
       throw Exception('Basic Auth não configurado.');
     }
-
     if (appClienteToken.isEmpty) {
       throw Exception('Token do cliente não encontrado.');
     }
-
     if (appClienteUid.isEmpty) {
       throw Exception('UID do cliente não encontrado.');
     }
-
     if (pedidoUid.isEmpty) {
       throw Exception('UID do pedido não encontrado.');
     }
@@ -222,7 +257,6 @@ class OrderService {
     debugPrint('BODY PAGAMENTO PEDIDO: ${response.body}');
 
     dynamic decoded;
-
     if (response.body.trim().isNotEmpty) {
       decoded = jsonDecode(response.body);
     }
