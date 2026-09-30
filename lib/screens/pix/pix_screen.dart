@@ -328,7 +328,7 @@ class _PixScreenState extends State<PixScreen> {
       bin: '',
       autoCode: '',
       cardBrand: '',
-      idTipoPagamento: '4',
+      idTipoPagamento: '3',
       status: '1',
       valor: _valorTotal,
     );

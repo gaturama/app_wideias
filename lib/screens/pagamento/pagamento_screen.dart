@@ -3,11 +3,9 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_colors.dart';
 import '../../models/cart_item_model.dart';
 import '../../providers/pedidos_provider.dart';
-
 import '../../providers/storage_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../widgets/custom_alert.dart';
-import '../../core/services/google_pay_service.dart';
 import '../../core/services/order_service.dart';
 
 class PagamentoScreen extends StatefulWidget {
@@ -19,63 +17,48 @@ class PagamentoScreen extends StatefulWidget {
 
 class _PagamentoScreenState extends State<PagamentoScreen> {
   List<CartItemModel> _cart = [];
-
   String? _locationId;
   String? _locationName;
   String? _observacoes;
   String? _mesa;
   int? _idEvento;
-
   bool _usarCredito = false;
   bool _loading = false;
   bool _modoPagamentoExistente = false;
-
   String? _pedidoExistenteUid;
   double _saldoPagamento = 0.0;
-
-  final GooglePayService _googlePayService = GooglePayService();
-
+  double _saldoCredito = 0.0;
   final OrderService _orderService = OrderService();
-
   Map<String, dynamic>? _pedidoBackend;
 
   static const _metodos = [
     {'key': 'PIX', 'label': 'PIX', 'icon': Icons.pix},
-    {'key': 'Google Pay', 'label': 'Google Pay', 'icon': Icons.g_mobiledata},
-    {'key': 'Samsung Pay', 'label': 'Samsung Pay', 'icon': Icons.phone_android},
   ];
 
   @override
   void initState() {
     super.initState();
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       final args = ModalRoute.of(context)?.settings.arguments as Map?;
-
       if (args == null) return;
 
+      final storage = context.read<StorageProvider>();
       final pedidoUid = args['pedidoUid']?.toString();
-
       final saldo = double.tryParse(args['saldoPagamento']?.toString() ?? '');
 
       setState(() {
         _cart = List<CartItemModel>.from(args['cart'] ?? []);
-
         _locationId = args['locationId']?.toString();
-
         _locationName = args['locationName']?.toString();
-
         _observacoes = args['observacoes']?.toString();
-
         _mesa = args['mesa']?.toString();
-
         _idEvento = int.tryParse(args['idEvento']?.toString() ?? '');
+        _saldoCredito = storage.credito;
 
         if (pedidoUid != null && pedidoUid.isNotEmpty) {
           _modoPagamentoExistente = true;
           _pedidoExistenteUid = pedidoUid;
           _saldoPagamento = saldo ?? 0.0;
-
           _pedidoBackend = {
             'uid': pedidoUid,
             'SaldoPagamentoPedido': _saldoPagamento,
@@ -88,39 +71,80 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       debugPrint('Location ID: $_locationId');
       debugPrint('ID Evento: $_idEvento');
       debugPrint('Modo pedido existente: $_modoPagamentoExistente');
-      debugPrint(
-        'UID pedido presente: '
-        '${_pedidoExistenteUid != null}',
-      );
+      debugPrint('UID pedido presente: ${_pedidoExistenteUid != null}');
+      debugPrint('Saldo de crédito local: $_saldoCredito');
     });
   }
 
-  double get _totalCarrinho {
-    return _cart.fold(0.0, (sum, item) => sum + item.precoTotal);
-  }
+  double get _totalCarrinho =>
+      _cart.fold(0.0, (sum, item) => sum + item.precoTotal);
 
-  double get _credito {
-    return context.read<StorageProvider>().credito;
-  }
+  double get _credito => _saldoCredito;
 
-  double get _creditoAplicado {
-    return _usarCredito ? _credito.clamp(0, _totalCarrinho) : 0;
-  }
+  double get _valorBaseCredito =>
+      _modoPagamentoExistente ? _saldoPagamento : _totalCarrinho;
 
-  double get _totalFinal {
-    return _totalCarrinho - _creditoAplicado;
-  }
+  double get _creditoAplicado =>
+      _usarCredito ? _credito.clamp(0.0, _valorBaseCredito).toDouble() : 0.0;
 
-  double get _valorPagamentoTeste {
-    if (_modoPagamentoExistente) {
-      return _saldoPagamento;
+  double get _totalFinal => _totalCarrinho - _creditoAplicado;
+
+  double get _valorPagamento =>
+      _modoPagamentoExistente ? _saldoPagamento : _totalFinal;
+
+  Future<void> _registrarPagamentoCredito(
+    String pedidoUid,
+    double valor,
+  ) async {
+    final user = context.read<AuthProvider>().user;
+
+    if (user == null) {
+      throw Exception('Usuário não autenticado.');
     }
 
-    if (_totalFinal <= 20) {
-      return _totalFinal;
+    if (user.token.isEmpty) {
+      throw Exception('Token do usuário não encontrado.');
     }
 
-    return 20.0;
+    if (user.uid.isEmpty) {
+      throw Exception('UID do cliente não encontrado.');
+    }
+
+    debugPrint('=== PAGAMENTO VIA CRÉDITO ===');
+    debugPrint('Pedido UID: $pedidoUid');
+    debugPrint('Valor crédito: $valor');
+    debugPrint('Tipo pagamento: 63');
+
+    await _orderService.registrarPagamentoPedido(
+      appClienteToken: user.token,
+      appClienteUid: user.uid,
+      pedidoUid: pedidoUid,
+      transactionCode: 'CREDITO',
+      transactionID: pedidoUid,
+      nsu: '',
+      bin: '',
+      autoCode: '',
+      cardBrand: '',
+      idTipoPagamento: '63',
+      status: '1',
+      valor: valor,
+    );
+  }
+
+  Future<void> _atualizarSaldoCreditoLocal(double valorUtilizado) async {
+    final novoSaldo = (_saldoCredito - valorUtilizado)
+        .clamp(0.0, double.infinity)
+        .toDouble();
+
+    if (mounted) {
+      setState(() {
+        _saldoCredito = novoSaldo;
+      });
+    }
+
+    await context.read<StorageProvider>().setCredito(novoSaldo);
+
+    debugPrint('Saldo de crédito atualizado: $novoSaldo');
   }
 
   Future<void> _handleMetodo(String key) async {
@@ -140,145 +164,86 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       return;
     }
 
-    if (key == 'Samsung Pay') {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Samsung Pay ainda não está integrado.')),
-      );
-      return;
-    }
-
     try {
-      if (key == 'PIX') {
-        setState(() => _loading = true);
+      setState(() => _loading = true);
 
-        final pedido = await _garantirPedidoCriado();
+      final pedido = await _garantirPedidoCriado();
+      final pedidoUid = pedido['uid']?.toString();
 
-        final pedidoUid = pedido['uid']?.toString();
+      if (pedidoUid == null || pedidoUid.isEmpty) {
+        throw Exception('UID do pedido não encontrado.');
+      }
 
-        if (pedidoUid == null || pedidoUid.isEmpty) {
-          throw Exception('UID do pedido não encontrado.');
-        }
+      final valorCredito = _creditoAplicado;
 
-        final valorPagamento = _valorPagamentoTeste;
+      if (_usarCredito && valorCredito <= 0) {
+        throw Exception('Não há crédito disponível para este pagamento.');
+      }
 
-        debugPrint('=== VALOR PARA PAGAMENTO ===');
-        debugPrint('Valor do carrinho: $_totalCarrinho');
-        debugPrint('Valor restante: $_saldoPagamento');
-        debugPrint(
-          'Valor enviado para PIX: '
-          '$valorPagamento',
+      if (valorCredito > 0) {
+        await _registrarPagamentoCredito(pedidoUid, valorCredito);
+
+        await _atualizarSaldoCreditoLocal(valorCredito);
+      }
+
+      final pedidoAtualizado = await _consultarPedidoBackend();
+
+      if (pedidoAtualizado == null) {
+        throw Exception(
+          'Não foi possível consultar o pedido após o pagamento.',
         );
+      }
 
-        if (!mounted) return;
+      final saldo =
+          double.tryParse(
+            pedidoAtualizado['SaldoPagamentoPedido']?.toString() ?? '',
+          ) ??
+          0.0;
 
-        setState(() => _loading = false);
+      final status =
+          int.tryParse(pedidoAtualizado['Status']?.toString() ?? '') ?? 0;
 
-        final pago = await Navigator.of(context).pushNamed(
-          '/pix',
-          arguments: {'valorTotal': valorPagamento, 'pedidoUid': pedidoUid},
+      final uid = pedidoAtualizado['UID']?.toString() ?? pedidoUid;
+
+      debugPrint('=== RESULTADO DO PAGAMENTO ===');
+      debugPrint('Status: $status');
+      debugPrint('Saldo restante: $saldo');
+      debugPrint('Crédito atual: $_saldoCredito');
+
+      if (saldo <= 0.01) {
+        await _finalizarPedidoLocal(
+          uid: uid,
+          saldo: 0.0,
+          status: 1,
+          metodo: 'Crédito',
         );
-
-        if (!mounted) return;
-
-        if (pago == true) {
-          setState(() => _loading = true);
-
-          final pedidoAtualizado = await _consultarPedidoBackend();
-
-          if (!mounted) return;
-
-          if (pedidoAtualizado == null) {
-            setState(() => _loading = false);
-
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text(
-                  'Pagamento confirmado, mas não foi possível consultar o pedido.',
-                ),
-              ),
-            );
-
-            return;
-          }
-
-          final saldo =
-              double.tryParse(
-                pedidoAtualizado['SaldoPagamentoPedido']?.toString() ?? '',
-              ) ??
-              0.0;
-
-          final status =
-              int.tryParse(pedidoAtualizado['Status']?.toString() ?? '') ?? 0;
-
-          final uid = pedidoAtualizado['UID']?.toString() ?? pedidoUid;
-
-          debugPrint('=== RESULTADO PAGAMENTO ===');
-          debugPrint('Status: $status');
-          debugPrint('Saldo restante: $saldo');
-
-          final auth = context.read<AuthProvider>();
-
-          final pedidosProvider = context.read<PedidosProvider>();
-
-          await pedidosProvider.adicionarPedidos(
-            userId: auth.user?.id ?? '',
-            cart: _cart,
-            metodo: 'PIX',
-            locationId: _locationId ?? '',
-            locationName:
-                _locationName ??
-                context.read<StorageProvider>().locationName ??
-                '',
-            mesa: _mesa,
-            backendUid: uid,
-            saldoPagamento: saldo,
-            statusPagamento: status,
-          );
-
-          if (saldo > 0.01) {
-            await _manterPedidoPendente(uid);
-
-            if (!mounted) return;
-
-            setState(() => _loading = false);
-
-            CustomAlert.show(
-              context,
-              title: 'Pagamento parcial',
-              message:
-                  'Pagamento confirmado!\n\n'
-                  'Ainda faltam '
-                  'R\$ ${saldo.toStringAsFixed(2)} '
-                  'para liberar a retirada.',
-              confirmText: 'OK',
-              onConfirm: () => Navigator.of(
-                context,
-              ).pushNamedAndRemoveUntil('/home', (route) => false),
-            );
-
-            return;
-          }
-
-          await _finalizarPagamentoPIX(uid, saldo, status);
-        }
-
         return;
       }
 
-      if (key == 'Google Pay') {
+      if (!mounted) return;
+
+      setState(() => _loading = false);
+
+      final pago = await Navigator.of(
+        context,
+      ).pushNamed('/pix', arguments: {'valorTotal': saldo, 'pedidoUid': uid});
+
+      if (!mounted) return;
+
+      if (pago == true) {
         setState(() => _loading = true);
 
-        final disponivel = await _googlePayService.isReadyToPay();
+        final pedidoFinal = await _consultarPedidoBackend();
 
         if (!mounted) return;
 
-        if (!disponivel) {
+        if (pedidoFinal == null) {
           setState(() => _loading = false);
 
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
               content: Text(
-                'Google Pay não está disponível neste dispositivo.',
+                'Pagamento confirmado, mas não foi possível consultar o pedido.',
               ),
             ),
           );
@@ -286,25 +251,52 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
           return;
         }
 
-        await _garantirPedidoCriado();
+        final saldoFinal =
+            double.tryParse(
+              pedidoFinal['SaldoPagamentoPedido']?.toString() ?? '',
+            ) ??
+            0.0;
 
-        final resultado = await _googlePayService.pay(amount: _totalFinal);
+        final statusFinal =
+            int.tryParse(pedidoFinal['Status']?.toString() ?? '') ?? 0;
 
-        if (!mounted) return;
+        final uidFinal = pedidoFinal['UID']?.toString() ?? uid;
 
-        setState(() => _loading = false);
+        debugPrint('=== RESULTADO FINAL ===');
+        debugPrint('Status: $statusFinal');
+        debugPrint('Saldo restante: $saldoFinal');
+        debugPrint('Crédito atual: $_saldoCredito');
 
-        if (resultado['status'] == 'PAID') {
-          await _finalizarPagamento('Google Pay');
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Não foi possível confirmar o pagamento.'),
-            ),
+        if (saldoFinal > 0.01) {
+          await _manterPedidoPendente(uidFinal);
+
+          if (!mounted) return;
+
+          setState(() => _loading = false);
+
+          CustomAlert.show(
+            context,
+            title: 'Pagamento parcial',
+            message:
+                'Pagamento confirmado!\n\n'
+                'Ainda faltam '
+                'R\$ ${saldoFinal.toStringAsFixed(2)} '
+                'para liberar a retirada.',
+            confirmText: 'OK',
+            onConfirm: () => Navigator.of(
+              context,
+            ).pushNamedAndRemoveUntil('/home', (route) => false),
           );
+
+          return;
         }
 
-        return;
+        await _finalizarPedidoLocal(
+          uid: uidFinal,
+          saldo: 0.0,
+          status: statusFinal,
+          metodo: 'Crédito + PIX',
+        );
       }
     } catch (e) {
       if (!mounted) return;
@@ -320,7 +312,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   Future<Map<String, dynamic>> _garantirPedidoCriado() async {
     if (_pedidoBackend != null) {
       debugPrint('=== PEDIDO JÁ DISPONÍVEL ===');
-      debugPrint('UID presente: ${_pedidoBackend!['uid'] != null}');
+      debugPrint(
+        'UID presente: '
+        '${_pedidoBackend!['uid'] != null}',
+      );
       return _pedidoBackend!;
     }
 
@@ -347,7 +342,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
       }
 
       debugPrint('=== CONTINUANDO PEDIDO EXISTENTE ===');
-      debugPrint('UID do pedido presente: ${pedidoUid.isNotEmpty}');
+      debugPrint(
+        'UID do pedido presente: '
+        '${pedidoUid.isNotEmpty}',
+      );
       debugPrint('Saldo atual: $_saldoPagamento');
 
       _pedidoBackend = {
@@ -386,8 +384,14 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     }
 
     debugPrint('=== NOVO PEDIDO ===');
-    debugPrint('Cliente UID disponível: ${user.uid.isNotEmpty}');
-    debugPrint('Token disponível: ${user.token.isNotEmpty}');
+    debugPrint(
+      'Cliente UID disponível: '
+      '${user.uid.isNotEmpty}',
+    );
+    debugPrint(
+      'Token disponível: '
+      '${user.token.isNotEmpty}',
+    );
     debugPrint('ID Evento: $idEvento');
     debugPrint('Valor total: $_totalCarrinho');
     debugPrint('Quantidade de itens: ${_cart.length}');
@@ -469,21 +473,20 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     await storage.setPedidoPendenteUid(uid);
   }
 
-  Future<void> _finalizarPagamentoPIX(
-    String uid,
-    double saldo,
-    int status,
-  ) async {
+  Future<void> _finalizarPedidoLocal({
+    required String uid,
+    required double saldo,
+    required int status,
+    required String metodo,
+  }) async {
     final auth = context.read<AuthProvider>();
-
     final storage = context.read<StorageProvider>();
+    final pedidos = context.read<PedidosProvider>();
 
-    final pedidosProvider = context.read<PedidosProvider>();
-
-    await pedidosProvider.adicionarPedidos(
+    await pedidos.adicionarPedidos(
       userId: auth.user?.id ?? '',
       cart: _cart,
-      metodo: 'PIX',
+      metodo: metodo,
       locationId: _locationId ?? '',
       locationName: _locationName ?? storage.locationName ?? '',
       mesa: _mesa,
@@ -501,55 +504,10 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
     CustomAlert.show(
       context,
       title: 'Pagamento confirmado!',
-      message:
-          'O pedido foi totalmente pago.\n\n'
-          'A retirada já está liberada.',
-      confirmText: 'OK',
-      onConfirm: () => Navigator.of(
-        context,
-      ).pushNamedAndRemoveUntil('/home', (route) => false),
-    );
-  }
-
-  Future<void> _finalizarPagamento(String metodo) async {
-    if (_cart.isEmpty && !_modoPagamentoExistente) {
-      return;
-    }
-
-    setState(() => _loading = true);
-
-    final storage = context.read<StorageProvider>();
-
-    final auth = context.read<AuthProvider>();
-
-    final pedidos = context.read<PedidosProvider>();
-
-    if (_creditoAplicado > 0) {
-      await storage.setCredito(_credito - _creditoAplicado);
-    }
-
-    await pedidos.adicionarPedidos(
-      userId: auth.user?.id ?? '',
-      cart: _cart,
-      metodo: metodo,
-      locationId: _locationId ?? '',
-      locationName: _locationName ?? '',
-      mesa: _mesa,
-      backendUid: _pedidoBackend?['uid']?.toString(),
-      saldoPagamento: 0.0,
-      statusPagamento: 1,
-    );
-
-    await storage.limparPedidoPendenteUid();
-
-    if (!mounted) return;
-
-    setState(() => _loading = false);
-
-    CustomAlert.show(
-      context,
-      title: 'Pagamento confirmado!',
-      message: 'Pedido totalmente pago.',
+      message: saldo <= 0.01
+          ? 'O pedido foi totalmente pago.\n\n'
+                'A retirada já está liberada.'
+          : 'Pagamento confirmado.',
       confirmText: 'OK',
       onConfirm: () => Navigator.of(
         context,
@@ -559,8 +517,6 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final credito = context.watch<StorageProvider>().credito;
-
     return Scaffold(
       backgroundColor: AppColors.background,
       body: Column(
@@ -575,7 +531,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   _buildTotalCard(),
                   if (!_modoPagamentoExistente) ...[
                     const SizedBox(height: 16),
-                    _buildCreditoToggle(credito),
+                    _buildCreditoToggle(_saldoCredito),
                     const SizedBox(height: 12),
                     SizedBox(
                       width: double.infinity,
@@ -639,7 +595,11 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                     ..._metodos.map(
                       (m) => _buildMetodoBtn(
                         m['key'] as String,
-                        m['label'] as String,
+                        _usarCredito
+                            ? (_creditoAplicado >= _valorBaseCredito - 0.01
+                                  ? 'Pagar com crédito'
+                                  : 'Crédito + PIX')
+                            : m['label'] as String,
                         m['icon'] as IconData,
                       ),
                     ),
@@ -694,7 +654,7 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
   }
 
   Widget _buildTotalCard() {
-    final valor = _valorPagamentoTeste;
+    final valor = _valorPagamento;
 
     return Container(
       padding: const EdgeInsets.all(20),
@@ -742,9 +702,9 @@ class _PagamentoScreenState extends State<PagamentoScreen> {
                   ),
                 ),
                 if (_modoPagamentoExistente)
-                  Text(
+                  const Text(
                     'Saldo atual do pedido',
-                    style: const TextStyle(color: Colors.white70, fontSize: 12),
+                    style: TextStyle(color: Colors.white70, fontSize: 12),
                   ),
               ],
             ),
